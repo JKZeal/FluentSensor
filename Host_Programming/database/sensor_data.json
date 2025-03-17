@@ -1,0 +1,84 @@
+,{
+    "temperature": 29.23,
+    "humidity": 50.14,
+    "pm25": 12,
+    "noise": 42.6
+},
+{
+    "temperature": 24.47,
+    "humidity": 59.22,
+    "pm25": 50,
+    "noise": 64.73
+},
+{
+    "temperature": 26.16,
+    "humidity": 52.27,
+    "pm25": 19,
+    "noise": 30.95
+},
+{
+    "temperature": 22.89,
+    "humidity": 59.82,
+    "pm25": 71,
+    "noise": 59.27
+},
+{
+    "temperature": 26.71,
+    "humidity": 45.73,
+    "pm25": 34,
+    "noise": 32.71
+},
+{
+    "temperature": 23.42,
+    "humidity": 43.97,
+    "pm25": 11,
+    "noise": 64.03
+},
+{
+    "temperature": 22.72,
+    "humidity": 57.75,
+    "pm25": 95,
+    "noise": 67.89
+},
+{
+    "temperature": 20.65,
+    "humidity": 43.8,
+    "pm25": 27,
+    "noise": 69.08
+},
+{
+    "temperature": 27.32,
+    "humidity": 46.22,
+    "pm25": 28,
+    "noise": 61.62
+},
+{
+    "temperature": 20.22,
+    "humidity": 42.42,
+    "pm25": 68,
+    "noise": 44.33
+},
+{
+    "temperature": 22.51,
+    "humidity": 42.73,
+    "pm25": 54,
+    "noise": 42.9
+},
+{
+    "temperature": 27.07,
+    "humidity": 52.2,
+    "pm25": 55,
+    "noise": 49.47
+},
+{
+    "temperature": 29.89,
+    "humidity": 55.35,
+    "pm25": 8,
+    "noise": 51.86
+},
+{
+    "temperature": 24.71,
+    "humidity": 52.52,
+    "pm25": 34,
+    "noise": 45.97
+}
