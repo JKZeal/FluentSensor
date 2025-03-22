@@ -2,9 +2,10 @@ import socket
 import struct
 import csv
 from datetime import datetime
+from database import init_db, save_to_db  # 导入数据库工具
 
 def calculate_checksum(data):
-    #计算校验位（累加和校验）
+    # 计算校验位（累加和校验）
     checksum = 0
     for byte in data:
         checksum += byte
@@ -35,7 +36,7 @@ def unpack_data(packet):
     }
 
 def save_to_csv(data, filename="sensor_data.csv"):
-    # 添加时间戳到数据中
+    """保存数据到CSV文件"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data_with_timestamp = {"timestamp": timestamp, **data}
 
@@ -46,7 +47,10 @@ def save_to_csv(data, filename="sensor_data.csv"):
             writer.writeheader()
         writer.writerow(data_with_timestamp)
 
-def receive_tcp_data(host='127.0.0.1', port=5000): # 监听数据包
+def receive_tcp_data(host='127.0.0.1', port=5000):
+    # 初始化数据库
+    init_db()
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((host, port))
     server_socket.listen(1)
@@ -66,7 +70,8 @@ def receive_tcp_data(host='127.0.0.1', port=5000): # 监听数据包
                     try:
                         sensor_data = unpack_data(packet)
                         print(f"Received: {sensor_data}")
-                        save_to_csv(sensor_data)
+                        save_to_csv(sensor_data)  # 保存到CSV
+                        save_to_db(sensor_data)   # 保存到数据库
                     except ValueError as e:
                         print(f"Error parsing packet: {e}")
             except Exception as e:
