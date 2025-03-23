@@ -1,6 +1,5 @@
 import socket
 import struct
-from datetime import datetime
 from database import init_db, save_to_db  # 导入数据库工具
 
 def calculate_checksum(data):
