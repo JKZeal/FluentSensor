@@ -1,6 +1,5 @@
 import socket
 import struct
-import csv
 from datetime import datetime
 from database import init_db, save_to_db  # 导入数据库工具
 
@@ -35,18 +34,6 @@ def unpack_data(packet):
         "noise": noise
     }
 
-def save_to_csv(data, filename="sensor_data.csv"):
-    """保存数据到CSV文件"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    data_with_timestamp = {"timestamp": timestamp, **data}
-
-    # 写入 CSV 文件
-    with open(filename, mode="a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=["timestamp", "temperature", "humidity", "pm25", "noise"])
-        if file.tell() == 0:
-            writer.writeheader()
-        writer.writerow(data_with_timestamp)
-
 def receive_tcp_data(host='127.0.0.1', port=5000):
     # 初始化数据库
     init_db()
@@ -70,7 +57,6 @@ def receive_tcp_data(host='127.0.0.1', port=5000):
                     try:
                         sensor_data = unpack_data(packet)
                         print(f"Received: {sensor_data}")
-                        save_to_csv(sensor_data)  # 保存到CSV
                         save_to_db(sensor_data)   # 保存到数据库
                     except ValueError as e:
                         print(f"Error parsing packet: {e}")
