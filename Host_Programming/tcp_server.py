@@ -1,13 +1,36 @@
+import sqlite3
+from datetime import datetime
 import socket
 import struct
-from database import init_db, save_to_db  # 导入数据库工具
 
-def calculate_checksum(data):
-    # 计算校验位（累加和校验）
-    checksum = 0
-    for byte in data:
-        checksum += byte
-    return checksum & 0xFF  # 取低 8 位
+DB_PATH = "sensor_data.db"
+
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sensor_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                temperature REAL NOT NULL,
+                humidity REAL NOT NULL,
+                pm25 INTEGER NOT NULL,
+                noise INTEGER NOT NULL
+            )
+        """)
+
+def save_to_db(data):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            INSERT INTO sensor_data 
+            (timestamp, temperature, humidity, pm25, noise)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            data['temperature'],
+            data['humidity'],
+            data['pm25'],
+            data['noise']
+        ))
 
 def unpack_data(packet):
     # 解析头（4 字节）
@@ -15,9 +38,6 @@ def unpack_data(packet):
     if header != b'\xAA\xBB\xCC\xDD':
         raise ValueError("Invalid header")
     data = packet[4:11]
-    checksum = packet[11]
-    if calculate_checksum(data) != checksum:
-        raise ValueError("Checksum verification failed")
     # 解析温度（2 字节，int16_t）
     temperature = struct.unpack('>h', data[:2])[0] / 10.0
     # 解析湿度（2 字节，uint16_t）
@@ -33,8 +53,7 @@ def unpack_data(packet):
         "noise": noise
     }
 
-def receive_tcp_data(host='127.0.0.1', port=5000):
-    # 初始化数据库
+def receive_tcp_data(host='0.0.0.0', port=5000):
     init_db()
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -52,11 +71,10 @@ def receive_tcp_data(host='127.0.0.1', port=5000):
                     packet = client_socket.recv(12)
                     if not packet:
                         break
-                    # 解析数据包
                     try:
                         sensor_data = unpack_data(packet)
                         print(f"Received: {sensor_data}")
-                        save_to_db(sensor_data)   # 保存到数据库
+                        save_to_db(sensor_data)
                     except ValueError as e:
                         print(f"Error parsing packet: {e}")
             except Exception as e:

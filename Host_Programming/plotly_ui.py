@@ -137,11 +137,11 @@ def update_graphs(n, thresholds):
     earliest_time = (pd.to_datetime(latest_time) - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
 
     # 检查是否超出阈值并触发报警
-    latest_data = df.iloc[-1]  # 获取最新一条数据
-    for metric, value in latest_data[['temperature', 'humidity', 'pm25', 'noise']].items():
-        if value > thresholds[metric]:
-            print(f"报警: {metric} 超出阈值 ({value} > {thresholds[metric]})")
-            threading.Thread(target=play_alarm).start()  # 异步播放报警音频
+    # latest_data = df.iloc[-1]  # 获取最新一条数据
+    # for metric, value in latest_data[['temperature', 'humidity', 'pm25', 'noise']].items():
+    #     if value > thresholds[metric]:
+    #         print(f"报警: {metric} 超出阈值 ({value} > {thresholds[metric]})")
+    #         threading.Thread(target=play_alarm).start()  # 异步播放报警音频
 
     # 创建温度图形
     temperature_fig = go.Figure()
