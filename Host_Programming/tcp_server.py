@@ -5,7 +5,7 @@ import struct
 
 DB_PATH = "sensor_data.db"
 
-def init_db():
+def connect_to_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sensor_data (
@@ -54,7 +54,7 @@ def unpack_data(packet):
     }
 
 def receive_tcp_data(host='0.0.0.0', port=5000):
-    init_db()
+    connect_to_db()
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((host, port))
