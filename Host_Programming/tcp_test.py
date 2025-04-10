@@ -67,7 +67,7 @@ def send_tcp_data(host='127.0.0.1', port=5000):
             client_socket.sendall(packet)
             print(f"Sent: {sensor_data}")
             # 等待n秒
-            time.sleep(1)
+            time.sleep(2)
     except Exception as e:
         print(f"Error: {e}")
     finally:
