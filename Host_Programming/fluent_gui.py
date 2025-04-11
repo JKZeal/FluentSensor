@@ -7,13 +7,12 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QDate, QEvent
 from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtWidgets import (QApplication, QVBoxLayout, QWidget, QHBoxLayout, QLabel,
                              QGroupBox, QFrame, QButtonGroup, QRadioButton, QTableWidgetItem,
-                             QSizePolicy, QFileDialog)
+                             QSizePolicy, QFileDialog, QGridLayout)
 from qfluentwidgets import (NavigationInterface, NavigationItemPosition, FluentWindow,
                             ComboBox, Slider, PrimaryPushButton, StyleSheetBase,
                             MessageBox, InfoBar, InfoBarPosition, PushButton,
                             RoundMenu, Action, FluentIcon, setTheme, Theme, isDarkTheme, qconfig,
                             ZhDatePicker, TableWidget, SmoothMode, SingleDirectionScrollArea,
-    # 添加以下组件
                             CardWidget, ElevatedCardWidget, HeaderCardWidget, BodyLabel,
                             CaptionLabel, IconWidget, TransparentToolButton, InfoBarIcon)
 from qfluentwidgets.components.widgets.acrylic_label import AcrylicBrush
@@ -147,48 +146,65 @@ class RealtimeDataCard(HeaderCardWidget):
         self.setTitle("实时环境数据")
         self.setBorderRadius(10)
 
-        # 右上角显示时间的标签
-        self.time_label = CaptionLabel(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self)
-        self.time_label.setStyleSheet("font-size: 14px;")
+        # # 右上角显示时间的标签
+        # self.time_label = CaptionLabel(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self)
+        # self.time_label.setStyleSheet("font-size: 14px;")
+        #
+        # # 在标题后添加时间标签
+        # header_layout = QHBoxLayout()
+        # header_layout.addWidget(CaptionLabel("最后更新时间:", self))
+        # header_layout.addWidget(self.time_label)
+        # header_layout.addStretch(1)
+        #
+        # self.viewLayout.addLayout(header_layout)
+        #
+        # # 调整间距
+        # self.viewLayout.addSpacing(10)
 
-        # 指标容器
-        indicator_layout = QHBoxLayout()
-        indicator_layout.setSpacing(20)
+        # 指标容器 - 使用网格布局代替水平布局，以便更好地分布四个指标
+        indicator_layout = QGridLayout()
+        indicator_layout.setHorizontalSpacing(20)
+        indicator_layout.setVerticalSpacing(15)
 
+        # 创建时间戳和四个指标卡片
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.time_indicator = self._create_indicator("更新时间", current_time, FluentIcon.HISTORY, time_card=True)
         self.temp_indicator = self._create_indicator("温度", "0°C", FluentIcon.CALORIES)
         self.humidity_indicator = self._create_indicator("湿度", "0%", FluentIcon.CLOUD)
         self.pm25_indicator = self._create_indicator("PM2.5", "0 μg/m³", FluentIcon.LEAF)
         self.noise_indicator = self._create_indicator("噪声", "0 dB", FluentIcon.SPEAKERS)
 
-        # 添加到布局
-        indicator_layout.addWidget(self.temp_indicator)
-        indicator_layout.addWidget(self.humidity_indicator)
-        indicator_layout.addWidget(self.pm25_indicator)
-        indicator_layout.addWidget(self.noise_indicator)
+        # 添加到网格布局中 - 分三行两列
+        # 第一行放时间指标，跨两列
+        indicator_layout.addWidget(self.time_indicator, 0, 0, 1, 2)
+        # 第二行和第三行放其他指标
+        indicator_layout.addWidget(self.temp_indicator, 1, 0)
+        indicator_layout.addWidget(self.humidity_indicator, 1, 1)
+        indicator_layout.addWidget(self.pm25_indicator, 2, 0)
+        indicator_layout.addWidget(self.noise_indicator, 2, 1)
 
-        # 创建一个单独的水平布局来显示时间
-        time_header_layout = QHBoxLayout()
-        time_header_layout.addStretch(1)  # 添加弹性空间将时间标签推到右侧
-        time_header_layout.addWidget(self.time_label, 0, Qt.AlignRight)
-        self.viewLayout.insertLayout(0, time_header_layout)  # 在主视图的顶部插入时间布局
+        # 设置列伸展
+        indicator_layout.setColumnStretch(0, 1)
+        indicator_layout.setColumnStretch(1, 1)
 
         # 添加指标布局到卡片的主视图
         self.viewLayout.addLayout(indicator_layout)
 
-    def _create_indicator(self, name, value, icon):
+
+    def _create_indicator(self, name, value, icon, time_card=False):
         """创建单个指标卡片"""
         card = ElevatedCardWidget(self)
         card.setBorderRadius(8)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(5)
+        layout.setSpacing(10)  # 增加间距
 
         # 添加图标和名称到一行
         header_layout = QHBoxLayout()
         icon_widget = IconWidget(icon, card)
         name_label = CaptionLabel(name, card)
-        name_label.setStyleSheet("font-size: 12px; color: #888;")
+        name_label.setStyleSheet("font-size: 14px; color: #888;")  # 增大字体
 
         header_layout.addWidget(icon_widget)
         header_layout.addWidget(name_label)
@@ -197,21 +213,30 @@ class RealtimeDataCard(HeaderCardWidget):
         # 添加值标签
         value_label = BodyLabel(value, card)
         value_label.setObjectName(f"{name.lower()}_value")
-        value_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+
+        # 为时间卡片设置不同的样式
+        if time_card:
+            value_label.setStyleSheet("font-size: 18px; font-weight: bold;")  # 时间卡片字体稍小
+            card.setMinimumHeight(90)  # 时间卡片高度稍小
+        else:
+            value_label.setStyleSheet("font-size: 24px; font-weight: bold;")  # 其他指标保持大字体
+            card.setMinimumHeight(120)  # 保持其他卡片高度
+
+        value_label.setAlignment(Qt.AlignCenter)  # 居中对齐
 
         layout.addLayout(header_layout)
-        layout.addWidget(value_label, 0, Qt.AlignCenter)
+        layout.addWidget(value_label)
 
         # 设置卡片大小策略
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        card.setMinimumHeight(100)
 
         return card
 
     def update_data(self, temperature=None, humidity=None, pm25=None, noise=None):
         """更新显示的数据"""
         # 更新时间
-        self.time_label.setText(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.time_indicator.findChild(BodyLabel, "更新时间_value").setText(current_time)
 
         # 更新指标值
         if temperature is not None:
@@ -225,7 +250,6 @@ class RealtimeDataCard(HeaderCardWidget):
 
         if noise is not None:
             self.noise_indicator.findChild(BodyLabel, "噪声_value").setText(f"{noise:.0f} dB")
-
 
 class TimeRangeSettings(QWidget):
     # 定义信号
@@ -403,6 +427,11 @@ class HistoryWidget(QWidget):
         self.query_button.clicked.connect(self.query_data)
         picker_layout.addWidget(self.query_button)
 
+        # 添加导出按钮 - 移到查询按钮旁边
+        self.export_button = PushButton("导出为CSV", self.date_card)
+        self.export_button.clicked.connect(self.export_data)
+        picker_layout.addWidget(self.export_button)
+
         picker_layout.addStretch()
 
         self.date_card.viewLayout.addWidget(date_desc)
@@ -433,17 +462,14 @@ class HistoryWidget(QWidget):
         except:
             pass
 
-        # 添加导出按钮
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        self.export_button = PushButton("导出为CSV", self.results_card)
-        self.export_button.clicked.connect(self.export_data)
-        button_layout.addWidget(self.export_button)
+        # 设置表格大小策略，使其能够填充可用空间
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        # 添加表格到结果卡片
         self.results_card.viewLayout.addWidget(self.table)
-        self.results_card.viewLayout.addLayout(button_layout)
 
-        layout.addWidget(self.results_card)
+        # 将结果卡片添加到主布局，并设置它可以拉伸
+        layout.addWidget(self.results_card, 1)  # 添加拉伸因子1，使其能够填充剩余空间
 
     def query_data(self):
         """根据选择的日期查询数据"""
@@ -690,7 +716,7 @@ class AboutWidget(QWidget):
         name_layout.addWidget(app_name, 0, Qt.AlignCenter)
 
         # 添加版本信息
-        version_label = CaptionLabel("版本 1.0.0", self)
+        version_label = CaptionLabel("版本 1.0", self)
         version_layout = QHBoxLayout()
         version_layout.addWidget(version_label, 0, Qt.AlignCenter)
 
@@ -699,6 +725,7 @@ class AboutWidget(QWidget):
             "这是一个环境数据监测与可视化系统，用于实时采集和显示环境参数。\n\n"
             "支持以下功能：\n"
             "• 实时显示温度、湿度、PM2.5和噪声数据\n"
+            "• 超出所设阈值报警\n"
             "• 历史数据查询与导出\n"
             "• 数据趋势图表分析\n"
             "• 自定义显示设置",
@@ -707,7 +734,7 @@ class AboutWidget(QWidget):
         desc_label.setWordWrap(True)
 
         # 添加著作权信息
-        copyright_label = CaptionLabel("© 2025 环境监测系统. 保留所有权利。", self)
+        copyright_label = CaptionLabel("© 2025春 综合工程设计 第5组。", self)
         copyright_layout = QHBoxLayout()
         copyright_layout.addWidget(copyright_label, 0, Qt.AlignCenter)
 
@@ -850,16 +877,17 @@ class MainWindow(FluentWindow):
                              NavigationItemPosition.BOTTOM)
 
     def init_plots(self):
-        # 修改为两栏布局，主区域用于图表，右侧留出空白用于滚动
+        # 修改为垂直布局，使内容自适应填充整个宽度
         main_container = QWidget()
-        main_layout = QHBoxLayout(main_container)
+        main_layout = QVBoxLayout(main_container)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
         # 创建容器小部件并使用垂直布局
         self.plots_container = QWidget()
+        # 给 plots_container 添加右侧边距，确保卡片与滚动条之间有间距
         plots_layout = QVBoxLayout(self.plots_container)
-        plots_layout.setContentsMargins(0, 0, 0, 0)
+        plots_layout.setContentsMargins(0, 0, 20, 0)  # 左、上、右、下 - 右侧添加20px边距
         plots_layout.setSpacing(20)
 
         # 添加实时数据卡片
@@ -878,17 +906,17 @@ class MainWindow(FluentWindow):
         plots_layout.addWidget(self.pm25_plot)
         plots_layout.addWidget(self.noise_plot)
 
-        # 限制图表容器宽度，使其不占满整个区域
-        self.plots_container.setMaximumWidth(1100)  # 可根据需要调整这个值
+        # 设置容器的大小策略，使其能够填充可用空间
+        self.plots_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         # 添加图表区域到主区域
         main_layout.addWidget(self.plots_container)
 
-        # 添加右侧空白区域用于滚动
-        scroll_handle = QWidget()
-        scroll_handle.setMinimumWidth(50)  # 可根据需要调整空白区域宽度
-        scroll_handle.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
-        main_layout.addWidget(scroll_handle)
+        # 底部可以添加一个空白区域用于滚动余量
+        scroll_space = QWidget()
+        scroll_space.setMinimumHeight(20)  # 底部留出一点空间
+        scroll_space.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        main_layout.addWidget(scroll_space)
 
         # 创建自定义滚动区域
         self.scroll_area = SingleDirectionScrollArea(orient=Qt.Vertical)
