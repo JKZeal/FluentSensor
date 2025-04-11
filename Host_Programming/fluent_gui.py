@@ -3,26 +3,27 @@ import sqlite3
 import numpy as np
 from enum import Enum
 from datetime import datetime, timedelta
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QDate, QEvent
-from PyQt5.QtGui import QBrush, QColor
-from PyQt5.QtWidgets import (QApplication, QVBoxLayout, QWidget, QHBoxLayout, QLabel,
-                             QGroupBox, QFrame, QButtonGroup, QRadioButton, QTableWidgetItem,
-                             QSizePolicy, QFileDialog, QGridLayout)
-from qfluentwidgets import (NavigationInterface, NavigationItemPosition, FluentWindow,
-                            ComboBox, Slider, PrimaryPushButton, StyleSheetBase,
-                            MessageBox, InfoBar, InfoBarPosition, PushButton,
-                            RoundMenu, Action, FluentIcon, setTheme, Theme, isDarkTheme, qconfig,
-                            ZhDatePicker, TableWidget, SmoothMode, SingleDirectionScrollArea,
-                            CardWidget, ElevatedCardWidget, HeaderCardWidget, BodyLabel,
-                            CaptionLabel, IconWidget, TransparentToolButton, InfoBarIcon)
-from qfluentwidgets.components.widgets.acrylic_label import AcrylicBrush
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QDate
+from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtWidgets import (QApplication, QVBoxLayout, QWidget, QHBoxLayout, QFileDialog,
+                             QGridLayout, QButtonGroup, QTableWidgetItem )
+
+from qfluentwidgets import (
+    NavigationInterface, NavigationItemPosition, FluentWindow, FluentIcon,
+    ComboBox, Slider, PrimaryPushButton, StyleSheetBase, PushButton,
+    MessageBox, InfoBar, InfoBarPosition, TransparentToolButton,
+    RoundMenu, Action, setTheme, Theme, isDarkTheme, qconfig,
+    ZhDatePicker, TableWidget, SmoothMode, SingleDirectionScrollArea,
+    CardWidget, ElevatedCardWidget, HeaderCardWidget, BodyLabel,
+    CaptionLabel, IconWidget, RadioButton, StrongBodyLabel
+)
+
 import pyqtgraph as pg
 
 DB_PATH = "sensor_data.db"
 
 
 class StyleSheet(StyleSheetBase, Enum):
-    """样式表"""
     MAIN_WINDOW = "main_window"
 
     def path(self, theme=Theme.AUTO):
@@ -40,21 +41,25 @@ class PlotWidget(pg.PlotWidget):
         self.dark_mode = dark_mode
 
         # 设置基本属性
-        self.setMinimumHeight(250)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMinimumHeight(240)
+        self.setBackground(None)
 
         # 初始化数据
         self.data = {'time': [], 'value': []}
 
-        # 保留鼠标滚轮缩放功能
-        self.plotItem.setMouseEnabled(x=True, y=True)
-
         # 初始化曲线
-        self.curve = self.plot(pen=pg.mkPen(color='white', width=2))
+        self.curve = self.plot(pen=pg.mkPen(color='#0078d4', width=2.5))
 
         # 设置底部轴为时间轴
         date_axis = pg.DateAxisItem(orientation='bottom')
         self.plotItem.setAxisItems({'bottom': date_axis})
+
+        # 设置字体
+        font = QFont()
+        font.setFamily("Microsoft YaHei UI")
+        font.setPointSize(9)
+        self.getAxis('bottom').tickFont = font
+        self.getAxis('left').tickFont = font
 
         # 根据主题设置外观
         self.update_theme(dark_mode)
@@ -64,16 +69,16 @@ class PlotWidget(pg.PlotWidget):
 
         # 设置颜色
         if dark_mode:
-            bg_color = (30, 30, 30, 255)
-            curve_color = '#4ec9b0'
-            text_color = 'white'
-            title_color = 'white'
+            bg_color = QColor(30, 30, 30, 0)  # 完全透明背景
+            curve_color = '#60cdff'
+            text_color = '#ffffff'
+            title_color = '#ffffff'
             grid_alpha = 0.2
         else:
-            bg_color = (245, 245, 245, 255)
-            curve_color = '#007acc'
-            text_color = '#303030'
-            title_color = '#101010'
+            bg_color = QColor(250, 250, 250, 0)  # 完全透明背景
+            curve_color = '#0078d4'
+            text_color = '#202020'
+            title_color = '#000000'
             grid_alpha = 0.15
 
         # 设置背景色和网格
@@ -81,17 +86,32 @@ class PlotWidget(pg.PlotWidget):
         self.plotItem.showGrid(x=True, y=True, alpha=grid_alpha)
 
         # 设置标题
-        self.plotItem.setTitle(self.plot_title, color=title_color, size="14pt", bold=True)
+        if self.plot_title:
+            self.plotItem.setTitle(self.plot_title, color=title_color, size="13pt", bold=True)
 
         # 设置坐标轴标签和样式
         self.plotItem.setLabel('left', self.y_axis_label, color=text_color)
         self.plotItem.setLabel('bottom', 'Time', color=text_color)
-        self.getAxis('left').setPen(text_color)
-        self.getAxis('bottom').setPen(text_color)
+
+        # 设置坐标轴颜色与主题匹配
+        self.getAxis('left').setPen(pg.mkPen(color=text_color, width=1))
+        self.getAxis('bottom').setPen(pg.mkPen(color=text_color, width=1))
         self.getAxis('left').setTextPen(text_color)
+        self.getAxis('bottom').setTextPen(text_color)
+
+        # 修改底部和左侧轴的背景，使其与卡片融合
+        for axis in ['left', 'bottom']:
+            ax = self.getAxis(axis)
+            # 尝试适用于不同版本的pyqtgraph
+            try:
+                # 新版本可能直接支持设置背景透明
+                ax.setStyle(brush=QColor(0, 0, 0, 0))
+            except:
+                # 对于旧版本，我们尝试不同的方法或简单忽略
+                pass
 
         # 更新曲线颜色
-        self.curve.setPen(pg.mkPen(color=curve_color, width=2))
+        self.curve.setPen(pg.mkPen(color=curve_color, width=2.5))
 
     def update_data(self, new_times, new_values):
         # 确保传入的是列表
@@ -109,26 +129,30 @@ class PlotWidget(pg.PlotWidget):
 
         # 自动缩放以适应所有点
         if new_times:
-            # Y轴自适应
-            y_min, y_max = min(new_values), max(new_values)
-            padding = max((y_max - y_min) * 0.1, 0.1) if y_max > y_min else 1.0
-            self.plotItem.setYRange(y_min - padding, y_max + padding)
+            # 计算适当的范围
+            x_min = min(new_times)
+            x_max = max(new_times)
+            y_min = min(new_values)
+            y_max = max(new_values)
 
-            # X轴自适应
-            x_min, x_max = min(new_times), max(new_times)
-            padding_x = (x_max - x_min) * 0.05 if x_max > x_min else 60
+            # 添加一些边距
+            padding_x = (x_max - x_min) * 0.05 if x_min != x_max else 86400
+            padding_y = (y_max - y_min) * 0.1 if y_min != y_max else 1
+
+            # 设置范围
             self.plotItem.setXRange(x_min - padding_x, x_max + padding_x)
+            self.plotItem.setYRange(y_min - padding_y, y_max + padding_y)
 
 
 class PlotCard(HeaderCardWidget):
     def __init__(self, title, y_label, dark_mode=False, parent=None):
         super().__init__(parent)
         self.setTitle(title)
-        self.setBorderRadius(10)
+        self.setBorderRadius(8)
 
-        # 创建图表
-        self.plot_widget = PlotWidget(title, y_label, dark_mode)
-        self.plot_widget.setMinimumHeight(300)
+        # 使用空标题创建图表，避免重复
+        self.plot_widget = PlotWidget("", y_label, dark_mode)
+        self.plot_widget.setMinimumHeight(240)
 
         # 添加到卡片主视图
         self.viewLayout.addWidget(self.plot_widget)
@@ -144,27 +168,12 @@ class RealtimeDataCard(HeaderCardWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setTitle("实时环境数据")
-        self.setBorderRadius(10)
+        self.setBorderRadius(8)
 
-        # # 右上角显示时间的标签
-        # self.time_label = CaptionLabel(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self)
-        # self.time_label.setStyleSheet("font-size: 14px;")
-        #
-        # # 在标题后添加时间标签
-        # header_layout = QHBoxLayout()
-        # header_layout.addWidget(CaptionLabel("最后更新时间:", self))
-        # header_layout.addWidget(self.time_label)
-        # header_layout.addStretch(1)
-        #
-        # self.viewLayout.addLayout(header_layout)
-        #
-        # # 调整间距
-        # self.viewLayout.addSpacing(10)
-
-        # 指标容器 - 使用网格布局代替水平布局，以便更好地分布四个指标
+        # 指标容器 - 使用网格布局
         indicator_layout = QGridLayout()
-        indicator_layout.setHorizontalSpacing(20)
-        indicator_layout.setVerticalSpacing(15)
+        indicator_layout.setHorizontalSpacing(16)
+        indicator_layout.setVerticalSpacing(12)
 
         # 创建时间戳和四个指标卡片
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -190,53 +199,53 @@ class RealtimeDataCard(HeaderCardWidget):
         # 添加指标布局到卡片的主视图
         self.viewLayout.addLayout(indicator_layout)
 
-
     def _create_indicator(self, name, value, icon, time_card=False):
         """创建单个指标卡片"""
-        card = ElevatedCardWidget(self)
+        card = ElevatedCardWidget()
         card.setBorderRadius(8)
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(10)  # 增加间距
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         # 添加图标和名称到一行
         header_layout = QHBoxLayout()
-        icon_widget = IconWidget(icon, card)
-        name_label = CaptionLabel(name, card)
-        name_label.setStyleSheet("font-size: 14px; color: #888;")  # 增大字体
+        icon_widget = IconWidget(icon)
+        icon_widget.setFixedSize(20, 20)
+        name_label = CaptionLabel(name)
+        name_label.setStyleSheet("font-size: 13px; font-weight: 500; color: var(--text-color-secondary);")
 
         header_layout.addWidget(icon_widget)
         header_layout.addWidget(name_label)
         header_layout.addStretch()
 
         # 添加值标签
-        value_label = BodyLabel(value, card)
-        value_label.setObjectName(f"{name.lower()}_value")
+        value_label = BodyLabel(value)
+        value_label.setObjectName(f"{name.lower().replace('.', '_')}_value")
 
         # 为时间卡片设置不同的样式
         if time_card:
-            value_label.setStyleSheet("font-size: 18px; font-weight: bold;")  # 时间卡片字体稍小
-            card.setMinimumHeight(90)  # 时间卡片高度稍小
+            value_label.setStyleSheet("font-size: 16px; font-weight: 600;")
+            card.setMinimumHeight(100)
         else:
-            value_label.setStyleSheet("font-size: 24px; font-weight: bold;")  # 其他指标保持大字体
-            card.setMinimumHeight(120)  # 保持其他卡片高度
+            value_label.setStyleSheet("font-size: 22px; font-weight: 600;")
+            card.setMinimumHeight(100)
 
-        value_label.setAlignment(Qt.AlignCenter)  # 居中对齐
+        value_label.setAlignment(Qt.AlignCenter)
 
         layout.addLayout(header_layout)
         layout.addWidget(value_label)
 
-        # 设置卡片大小策略
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
         return card
 
-    def update_data(self, temperature=None, humidity=None, pm25=None, noise=None):
+    def update_data(self, temperature=None, humidity=None, pm25=None, noise=None, timestamp=None):
         """更新显示的数据"""
         # 更新时间
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.time_indicator.findChild(BodyLabel, "更新时间_value").setText(current_time)
+        if timestamp:
+            self.time_indicator.findChild(BodyLabel, "更新时间_value").setText(timestamp)
+        else:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.time_indicator.findChild(BodyLabel, "更新时间_value").setText(current_time)
 
         # 更新指标值
         if temperature is not None:
@@ -246,43 +255,41 @@ class RealtimeDataCard(HeaderCardWidget):
             self.humidity_indicator.findChild(BodyLabel, "湿度_value").setText(f"{humidity:.1f}%")
 
         if pm25 is not None:
-            self.pm25_indicator.findChild(BodyLabel, "pm2.5_value").setText(f"{pm25:.0f} μg/m³")
+            self.pm25_indicator.findChild(BodyLabel, "pm2_5_value").setText(f"{pm25:.0f} μg/m³")
 
         if noise is not None:
             self.noise_indicator.findChild(BodyLabel, "噪声_value").setText(f"{noise:.0f} dB")
 
+
 class TimeRangeSettings(QWidget):
-    # 定义信号
     timeRangeChanged = pyqtSignal(int)
     refreshRateChanged = pyqtSignal(int)
     themeChanged = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("timeRangeSettings")
         self.dark_mode = isDarkTheme()
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setSpacing(16)
 
         # 创建标题
-        self.title_label = BodyLabel("数据显示设置", self)
-        self.title_label.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 15px;")
+        self.title_label = BodyLabel("系统设置", self)
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
         layout.addWidget(self.title_label)
 
         # 时间范围设置区域
         self.time_card = HeaderCardWidget(self)
-        self.time_card.setTitle("时间范围设置")
-        self.time_card.setBorderRadius(10)
-
-        # 添加说明
-        time_label = CaptionLabel("选择要显示的历史数据时间范围", self.time_card)
+        self.time_card.setTitle("时间范围")
+        self.time_card.setBorderRadius(8)
 
         # 创建下拉框
         combo_layout = QHBoxLayout()
-        combo_label = BodyLabel("时间范围:", self.time_card)
+        combo_label = BodyLabel("显示历史数据时间范围:", self.time_card)
         self.timeComboBox = ComboBox(self.time_card)
         self.timeComboBox.addItems(["1 分钟", "5 分钟", "15 分钟", "30 分钟",
                                     "1 小时", "3 小时", "12 小时", "24 小时"])
@@ -291,22 +298,19 @@ class TimeRangeSettings(QWidget):
         combo_layout.addWidget(self.timeComboBox)
         combo_layout.addStretch()
 
-        self.time_card.viewLayout.addWidget(time_label)
         self.time_card.viewLayout.addLayout(combo_layout)
 
         layout.addWidget(self.time_card)
 
         # 刷新频率设置区域
         self.refresh_card = HeaderCardWidget(self)
-        self.refresh_card.setTitle("刷新频率设置")
-        self.refresh_card.setBorderRadius(10)
+        self.refresh_card.setTitle("刷新频率")
+        self.refresh_card.setBorderRadius(8)
 
-        # 添加说明
-        refresh_label = CaptionLabel("设置数据刷新频率", self.refresh_card)
-
-        # 滑动条布局
-        slider_layout = QVBoxLayout()
-        self.refresh_value_label = BodyLabel("刷新频率: 2 秒", self.refresh_card)
+        # 修改为水平布局，将文本和滑动条左右排列
+        slider_layout = QHBoxLayout()
+        self.refresh_value_label = BodyLabel("数据更新间隔: 2 秒", self.refresh_card)
+        self.refresh_value_label.setMinimumWidth(150)  # 确保文本有足够宽度
         slider_layout.addWidget(self.refresh_value_label)
 
         self.refreshSlider = Slider(Qt.Horizontal, self.refresh_card)
@@ -315,24 +319,20 @@ class TimeRangeSettings(QWidget):
         self.refreshSlider.valueChanged.connect(self.on_refresh_slider_changed)
         slider_layout.addWidget(self.refreshSlider)
 
-        self.refresh_card.viewLayout.addWidget(refresh_label)
         self.refresh_card.viewLayout.addLayout(slider_layout)
-
         layout.addWidget(self.refresh_card)
 
         # 主题设置区域
         self.theme_card = HeaderCardWidget(self)
-        self.theme_card.setTitle("主题设置")
-        self.theme_card.setBorderRadius(10)
-
-        theme_desc = CaptionLabel("选择应用主题", self.theme_card)
+        self.theme_card.setTitle("外观主题")
+        self.theme_card.setBorderRadius(8)
 
         # 创建单选按钮
         radio_layout = QHBoxLayout()
         self.theme_button_group = QButtonGroup(self)
 
-        self.light_radio = QRadioButton("浅色主题", self.theme_card)
-        self.dark_radio = QRadioButton("深色主题", self.theme_card)
+        self.light_radio = RadioButton("浅色主题", self.theme_card)
+        self.dark_radio = RadioButton("深色主题", self.theme_card)
 
         self.light_radio.setChecked(not self.dark_mode)
         self.dark_radio.setChecked(self.dark_mode)
@@ -344,9 +344,7 @@ class TimeRangeSettings(QWidget):
         radio_layout.addWidget(self.dark_radio)
         radio_layout.addStretch()
 
-        self.theme_card.viewLayout.addWidget(theme_desc)
         self.theme_card.viewLayout.addLayout(radio_layout)
-
         layout.addWidget(self.theme_card)
 
         # 应用按钮
@@ -361,7 +359,7 @@ class TimeRangeSettings(QWidget):
         layout.addStretch()
 
     def on_refresh_slider_changed(self, value):
-        self.refresh_value_label.setText(f"刷新频率: {value} 秒")
+        self.refresh_value_label.setText(f"数据更新间隔: {value} 秒")
 
     def apply_settings(self):
         # 1. 发出时间范围改变信号
@@ -382,37 +380,230 @@ class TimeRangeSettings(QWidget):
         # 显示提示
         InfoBar.success(
             title='设置已应用',
-            content=f"已更新时间范围为 {self.timeComboBox.currentText()}，刷新频率为 {refresh_rate} 秒",
+            content='您的设置已成功应用',
             orient=Qt.Horizontal,
             isClosable=True,
             position=InfoBarPosition.TOP,
-            duration=3000,
+            duration=2000,
             parent=self.window()
         )
+
+
+class EnvironmentStatusWidget(QWidget):
+    """环境状态指标小部件"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        # 创建4个状态标签
+        self.temp_status = StrongBodyLabel("适宜")
+        self.temp_status.setFixedHeight(28)
+        self.temp_status.setAlignment(Qt.AlignCenter)
+        self.temp_status.setObjectName("tempLabel")
+
+        self.humidity_status = StrongBodyLabel("适宜")
+        self.humidity_status.setFixedHeight(28)
+        self.humidity_status.setAlignment(Qt.AlignCenter)
+        self.humidity_status.setObjectName("humidityLabel")
+
+        self.pm25_status = StrongBodyLabel("良好")
+        self.pm25_status.setFixedHeight(28)
+        self.pm25_status.setAlignment(Qt.AlignCenter)
+        self.pm25_status.setObjectName("pm25Label")
+
+        self.noise_status = StrongBodyLabel("安静")
+        self.noise_status.setFixedHeight(28)
+        self.noise_status.setAlignment(Qt.AlignCenter)
+        self.noise_status.setObjectName("noiseLabel")
+
+        # 设置标签样式
+        self._setup_label_style(self.temp_status)
+        self._setup_label_style(self.humidity_status)
+        self._setup_label_style(self.pm25_status)
+        self._setup_label_style(self.noise_status)
+
+        # 设置初始状态颜色
+        self.set_status_colors("适宜", "适宜", "良好", "安静")
+
+        # 添加到布局
+        layout.addWidget(self.temp_status)
+        layout.addWidget(self.humidity_status)
+        layout.addWidget(self.pm25_status)
+        layout.addWidget(self.noise_status)
+
+    def _setup_label_style(self, label):
+        """设置标签的基础样式"""
+        label.setStyleSheet("""
+            StrongBodyLabel {
+                border-radius: 4px;
+                padding: 2px 8px;
+                color: white;
+                font-weight: bold;
+            }
+        """)
+
+    def set_status_colors(self, temp_status, humidity_status, pm25_status, noise_status):
+        """设置状态颜色"""
+        # 设置温度状态
+        self.temp_status.setText(temp_status)
+        if temp_status == "寒冷":
+            self.temp_status.setStyleSheet("""
+                StrongBodyLabel#tempLabel {
+                    background-color: #007ad9;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        elif temp_status == "适宜":
+            self.temp_status.setStyleSheet("""
+                StrongBodyLabel#tempLabel {
+                    background-color: #16a34a;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        else:  # 炎热
+            self.temp_status.setStyleSheet("""
+                StrongBodyLabel#tempLabel {
+                    background-color: #e11d48;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+
+        # 设置湿度状态
+        self.humidity_status.setText(humidity_status)
+        if humidity_status == "干燥":
+            self.humidity_status.setStyleSheet("""
+                StrongBodyLabel#humidityLabel {
+                    background-color: #eab308;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        elif humidity_status == "适宜":
+            self.humidity_status.setStyleSheet("""
+                StrongBodyLabel#humidityLabel {
+                    background-color: #16a34a;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        else:  # 潮湿
+            self.humidity_status.setStyleSheet("""
+                StrongBodyLabel#humidityLabel {
+                    background-color: #0284c7;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+
+        # 设置PM2.5状态
+        self.pm25_status.setText(pm25_status)
+        if pm25_status == "良好":
+            self.pm25_status.setStyleSheet("""
+                StrongBodyLabel#pm25Label {
+                    background-color: #16a34a;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        elif pm25_status == "轻度污染":
+            self.pm25_status.setStyleSheet("""
+                StrongBodyLabel#pm25Label {
+                    background-color: #eab308;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        else:  # 重度污染
+            self.pm25_status.setStyleSheet("""
+                StrongBodyLabel#pm25Label {
+                    background-color: #e11d48;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+
+        # 设置噪声状态
+        self.noise_status.setText(noise_status)
+        if noise_status == "安静":
+            self.noise_status.setStyleSheet("""
+                StrongBodyLabel#noiseLabel {
+                    background-color: #16a34a;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        elif noise_status == "一般":
+            self.noise_status.setStyleSheet("""
+                StrongBodyLabel#noiseLabel {
+                    background-color: #eab308;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+        else:  # 嘈杂
+            self.noise_status.setStyleSheet("""
+                StrongBodyLabel#noiseLabel {
+                    background-color: #e11d48;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
 
 
 class HistoryWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("historyWidget")
         self.dark_mode = isDarkTheme()
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setSpacing(16)
 
         # 创建标题
-        self.title_label = BodyLabel("历史数据查询", self)
-        self.title_label.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 15px;")
+        self.title_label = BodyLabel("历史记录", self)
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
         layout.addWidget(self.title_label)
 
-        # 日期选择区域使用 HeaderCardWidget
+        # 日期选择区域
         self.date_card = HeaderCardWidget(self)
         self.date_card.setTitle("选择日期")
-        self.date_card.setBorderRadius(10)
-
-        date_desc = CaptionLabel("选择要查询的日期", self.date_card)
+        self.date_card.setBorderRadius(8)
 
         # 日期选择器和查询按钮的水平布局
         picker_layout = QHBoxLayout()
@@ -427,22 +618,20 @@ class HistoryWidget(QWidget):
         self.query_button.clicked.connect(self.query_data)
         picker_layout.addWidget(self.query_button)
 
-        # 添加导出按钮 - 移到查询按钮旁边
+        # 添加导出按钮
         self.export_button = PushButton("导出为CSV", self.date_card)
         self.export_button.clicked.connect(self.export_data)
         picker_layout.addWidget(self.export_button)
 
         picker_layout.addStretch()
 
-        self.date_card.viewLayout.addWidget(date_desc)
         self.date_card.viewLayout.addLayout(picker_layout)
-
         layout.addWidget(self.date_card)
 
         # 数据展示区域
         self.results_card = HeaderCardWidget(self)
         self.results_card.setTitle("查询结果")
-        self.results_card.setBorderRadius(10)
+        self.results_card.setBorderRadius(8)
 
         # 添加表格
         self.table = TableWidget(self.results_card)
@@ -451,25 +640,22 @@ class HistoryWidget(QWidget):
         self.table.setWordWrap(False)
         self.table.setColumnCount(6)
 
+        # 禁止编辑表格
+        self.table.setEditTriggers(TableWidget.NoEditTriggers)
+
         # 设置表头
         self.table.setHorizontalHeaderLabels(['时间', '温度(°C)', '湿度(%)', 'PM2.5(μg/m³)', '噪声(dB)', '状态'])
         self.table.verticalHeader().hide()
         self.table.setSelectRightClickedRow(True)
 
-        # 禁用平滑滚动以提高性能
-        try:
-            self.table.scrollDelagate.verticalSmoothScroll.setSmoothMode(SmoothMode.NO_SMOOTH)
-        except:
-            pass
-
-        # 设置表格大小策略，使其能够填充可用空间
-        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 设置表格大小策略
+        self.table.horizontalHeader().setStretchLastSection(True)
 
         # 添加表格到结果卡片
         self.results_card.viewLayout.addWidget(self.table)
 
-        # 将结果卡片添加到主布局，并设置它可以拉伸
-        layout.addWidget(self.results_card, 1)  # 添加拉伸因子1，使其能够填充剩余空间
+        # 将结果卡片添加到主布局
+        layout.addWidget(self.results_card, 1)
 
     def query_data(self):
         """根据选择的日期查询数据"""
@@ -477,38 +663,43 @@ class HistoryWidget(QWidget):
         date_str = selected_date.toString("yyyy-MM-dd")
 
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(DB_PATH, timeout=5)
             cursor = conn.cursor()
 
-            cursor.execute(
-                "SELECT timestamp, temperature, humidity, pm25, noise "
-                "FROM sensor_data "
-                "WHERE timestamp LIKE ? "
-                "ORDER BY timestamp",
-                (f"{date_str}%",)  # 使用通配符匹配当天所有时间
-            )
+            # 构建日期范围查询
+            start_date = f"{date_str} 00:00:00"
+            end_date = f"{date_str} 23:59:59"
 
-            data = cursor.fetchall()
+            # 执行查询
+            cursor.execute("""
+                SELECT timestamp, temperature, humidity, pm25, noise
+                FROM sensor_data
+                WHERE timestamp BETWEEN ? AND ?
+                ORDER BY timestamp DESC
+            """, (start_date, end_date))
+
+            # 获取结果
+            results = cursor.fetchall()
             conn.close()
 
             # 更新表格
-            self.update_table(data)
+            self.update_table(results)
 
-            # 显示查询结果消息
-            if data:
+            # 显示成功消息
+            if results:
                 InfoBar.success(
                     title='查询成功',
-                    content=f"找到 {len(data)} 条 {date_str} 的记录",
+                    content=f'找到 {len(results)} 条记录',
                     orient=Qt.Horizontal,
                     isClosable=True,
                     position=InfoBarPosition.TOP,
-                    duration=3000,
+                    duration=2000,
                     parent=self.window()
                 )
             else:
-                InfoBar.warning(
+                InfoBar.info(
                     title='无数据',
-                    content=f"未找到 {date_str} 的记录",
+                    content=f'所选日期 {date_str} 没有记录',
                     orient=Qt.Horizontal,
                     isClosable=True,
                     position=InfoBarPosition.TOP,
@@ -518,12 +709,12 @@ class HistoryWidget(QWidget):
 
         except Exception as e:
             InfoBar.error(
-                title='查询失败',
-                content=f"错误信息: {str(e)}",
+                title='查询错误',
+                content=f'发生错误: {str(e)}',
                 orient=Qt.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,
-                duration=5000,
+                duration=3000,
                 parent=self.window()
             )
 
@@ -536,90 +727,100 @@ class HistoryWidget(QWidget):
 
         # 定义环境评估阈值
         thresholds = {
-            'temp': {'良好': (18, 26), '注意': (10, 32), '警告': (0, 40)},
-            'humidity': {'良好': (40, 60), '注意': (30, 70), '警告': (0, 100)},
-            'pm25': {'良好': (0, 50), '注意': (50, 100), '警告': (100, 999)},
-            'noise': {'良好': (0, 50), '注意': (50, 70), '警告': (70, 999)}
+            'temp': {'寒冷': (-20, 10), '适宜': (10, 26), '炎热': (26, 50)},
+            'humidity': {'干燥': (0, 40), '适宜': (40, 70), '潮湿': (70, 100)},
+            'pm25': {'良好': (0, 35), '轻度污染': (35, 75), '重度污染': (75, 1000)},
+            'noise': {'安静': (0, 45), '一般': (45, 65), '嘈杂': (65, 120)}
         }
 
         for row_idx, row_data in enumerate(data):
             self.table.insertRow(row_idx)
 
-            # 解析时间仅显示时间部分
-            timestamp = row_data[0]
-            try:
-                dt = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-                time_str = dt.strftime("%H:%M:%S")
-            except:
-                time_str = timestamp
+            # 时间戳
+            timestamp_item = QTableWidgetItem(row_data[0])
+            self.table.setItem(row_idx, 0, timestamp_item)
 
-            temp = float(row_data[1])
-            humidity = float(row_data[2])
-            pm25 = float(row_data[3])
-            noise = float(row_data[4])
+            # 温度
+            temp = row_data[1]
+            temp_item = QTableWidgetItem(f"{temp:.1f}")
+            self.table.setItem(row_idx, 1, temp_item)
 
-            # 评估环境状态
-            status = self._evaluate_status(temp, humidity, pm25, noise, thresholds)
+            # 湿度
+            humidity = row_data[2]
+            humidity_item = QTableWidgetItem(f"{humidity:.1f}")
+            self.table.setItem(row_idx, 2, humidity_item)
 
-            # 设置单元格内容
-            self.table.setItem(row_idx, 0, QTableWidgetItem(time_str))
-            self.table.setItem(row_idx, 1, QTableWidgetItem(f"{temp:.1f}"))
-            self.table.setItem(row_idx, 2, QTableWidgetItem(f"{humidity:.1f}"))
-            self.table.setItem(row_idx, 3, QTableWidgetItem(f"{pm25:.0f}"))
-            self.table.setItem(row_idx, 4, QTableWidgetItem(f"{noise:.0f}"))
+            # PM2.5
+            pm25 = row_data[3]
+            pm25_item = QTableWidgetItem(f"{pm25}")
+            self.table.setItem(row_idx, 3, pm25_item)
 
-            # 设置状态单元格
-            status_item = QTableWidgetItem(status)
-            status_colors = {'良好': QColor(0, 170, 0), '注意': QColor(255, 140, 0), '警告': QColor(255, 0, 0)}
-            status_item.setForeground(QBrush(status_colors.get(status, QColor(0, 0, 0))))
-            self.table.setItem(row_idx, 5, status_item)
+            # 噪声
+            noise = row_data[4]
+            noise_item = QTableWidgetItem(f"{noise}")
+            self.table.setItem(row_idx, 4, noise_item)
+
+            # 设置指标状态 - 使用新的状态显示方式
+            temp_status = self._evaluate_temp(temp, thresholds['temp'])
+            humidity_status = self._evaluate_humidity(humidity, thresholds['humidity'])
+            pm25_status = self._evaluate_pm25(pm25, thresholds['pm25'])
+            noise_status = self._evaluate_noise(noise, thresholds['noise'])
+
+            # 创建状态小部件
+            status_widget = EnvironmentStatusWidget()
+            status_widget.set_status_colors(temp_status, humidity_status, pm25_status, noise_status)
+
+            # 将小部件添加到表格单元格
+            self.table.setCellWidget(row_idx, 5, status_widget)
 
         # 调整列宽
         self.table.resizeColumnsToContents()
 
-    def _evaluate_status(self, temp, humidity, pm25, noise, thresholds):
-        """评估环境状态"""
-        status = "良好"
+        # 确保状态列有足够的宽度
+        self.table.setColumnWidth(5, 300)
 
-        # 温度检查
-        if temp < thresholds['temp']['良好'][0] or temp > thresholds['temp']['良好'][1]:
-            if temp < thresholds['temp']['注意'][0] or temp > thresholds['temp']['注意'][1]:
-                return "警告"
-            status = "注意"
+    def _evaluate_temp(self, value, thresholds):
+        """评估温度状态"""
+        if value < thresholds['适宜'][0]:
+            return "寒冷"
+        elif value > thresholds['适宜'][1]:
+            return "炎热"
+        return "适宜"
 
-        # 湿度检查
-        if humidity < thresholds['humidity']['良好'][0] or humidity > thresholds['humidity']['良好'][1]:
-            if humidity < thresholds['humidity']['注意'][0] or humidity > thresholds['humidity']['注意'][1]:
-                return "警告"
-            elif status == "良好":
-                status = "注意"
+    def _evaluate_humidity(self, value, thresholds):
+        """评估湿度状态"""
+        if value < thresholds['适宜'][0]:
+            return "干燥"
+        elif value > thresholds['适宜'][1]:
+            return "潮湿"
+        return "适宜"
 
-        # PM2.5检查
-        if pm25 > thresholds['pm25']['良好'][1]:
-            if pm25 > thresholds['pm25']['注意'][1]:
-                return "警告"
-            elif status == "良好":
-                status = "注意"
+    def _evaluate_pm25(self, value, thresholds):
+        """评估PM2.5状态"""
+        if value <= thresholds['良好'][1]:
+            return "良好"
+        elif value <= thresholds['轻度污染'][1]:
+            return "轻度污染"
+        return "重度污染"
 
-        # 噪声检查
-        if noise > thresholds['noise']['良好'][1]:
-            if noise > thresholds['noise']['注意'][1]:
-                return "警告"
-            elif status == "良好":
-                status = "注意"
-
-        return status
+    def _evaluate_noise(self, value, thresholds):
+        """评估噪声状态"""
+        if value <= thresholds['安静'][1]:
+            return "安静"
+        elif value <= thresholds['一般'][1]:
+            return "一般"
+        return "嘈杂"
 
     def export_data(self):
         """导出表格数据为CSV文件"""
         if self.table.rowCount() == 0:
             InfoBar.warning(
                 title='导出失败',
-                content="没有数据可导出",
+                content='没有数据可导出',
                 orient=Qt.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,
-                duration=3000,
+                duration=2000,
                 parent=self.window()
             )
             return
@@ -631,7 +832,7 @@ class HistoryWidget(QWidget):
         # 使用系统对话框获取保存路径
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "导出为CSV",
+            "保存CSV文件",
             default_name,
             "CSV 文件 (*.csv)"
         )
@@ -641,401 +842,544 @@ class HistoryWidget(QWidget):
 
         try:
             with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
-                import csv
-                writer = csv.writer(f)
-
                 # 写入表头
-                headers = []
-                for col in range(self.table.columnCount()):
-                    headers.append(self.table.horizontalHeaderItem(col).text())
-                writer.writerow(headers)
+                headers = [self.table.horizontalHeaderItem(i).text() for i in range(self.table.columnCount())]
+                f.write(','.join(headers) + '\n')
 
-                # 写入数据
+                # 写入数据 - 需要特殊处理状态列，因为它是一个组件
                 for row in range(self.table.rowCount()):
                     row_data = []
                     for col in range(self.table.columnCount()):
-                        item = self.table.item(row, col)
-                        row_data.append(item.text() if item else "")
-                    writer.writerow(row_data)
+                        if col == 5:  # 状态列
+                            status_widget = self.table.cellWidget(row, col)
+                            temp_status = status_widget.temp_status.text()
+                            humidity_status = status_widget.humidity_status.text()
+                            pm25_status = status_widget.pm25_status.text()
+                            noise_status = status_widget.noise_status.text()
+                            row_data.append(f"{temp_status},{humidity_status},{pm25_status},{noise_status}")
+                        else:
+                            item = self.table.item(row, col)
+                            row_data.append(item.text() if item else '')
+                    f.write(','.join(row_data) + '\n')
 
             InfoBar.success(
                 title='导出成功',
-                content=f"数据已保存到: {file_path}",
+                content=f'数据已保存至 {file_path}',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self.window()
+            )
+        except Exception as e:
+            InfoBar.error(
+                title='导出失败',
+                content=f'发生错误: {str(e)}',
                 orient=Qt.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,
                 duration=3000,
                 parent=self.window()
             )
-        except Exception as e:
-            InfoBar.error(
-                title='导出失败',
-                content=f"错误信息: {str(e)}",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=5000,
-                parent=self.window()
-            )
 
     def update_theme(self, dark_mode):
         """更新所有组件的主题"""
         self.dark_mode = dark_mode
-
-        # 更新标题和标签颜色
-        title_color = "white" if dark_mode else "#333333"
-        self.title_label.setStyleSheet(
-            f"font-size: 20px; font-weight: bold; margin-bottom: 15px; color: {title_color};")
+        # 更新标题和标签颜色会由全局主题处理
 
 
-class AboutWidget(QWidget):
+class AlarmWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("alarmWidget")
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setSpacing(16)
 
-        # 创建卡片
-        about_card = HeaderCardWidget(self)
-        about_card.setTitle("关于应用")
-        about_card.setBorderRadius(10)
+        # 创建标题
+        self.title_label = BodyLabel("警报规则", self)
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
+        layout.addWidget(self.title_label)
 
-        # 添加图标
-        icon_layout = QHBoxLayout()
-        app_icon = IconWidget(FluentIcon.IOT, self)
-        app_icon.setFixedSize(64, 64)
-        icon_layout.addWidget(app_icon, 0, Qt.AlignCenter)
+        # 创建阈值设置卡片
+        self.threshold_card = HeaderCardWidget(self)
+        self.threshold_card.setTitle("环境参数阈值设置")
+        self.threshold_card.setBorderRadius(8)
 
-        # 添加应用名称
-        app_name = BodyLabel("环境监测系统", self)
-        app_name.setStyleSheet("font-size: 24px; font-weight: bold;")
-        name_layout = QHBoxLayout()
-        name_layout.addWidget(app_name, 0, Qt.AlignCenter)
+        # 添加表单
+        form_layout = QGridLayout()
+        form_layout.setVerticalSpacing(16)
+        form_layout.setHorizontalSpacing(10)
 
-        # 添加版本信息
-        version_label = CaptionLabel("版本 1.0", self)
-        version_layout = QHBoxLayout()
-        version_layout.addWidget(version_label, 0, Qt.AlignCenter)
+        # 温度阈值
+        temp_label = BodyLabel("温度警报范围 (°C):", self)
+        self.temp_min = ComboBox(self)
+        self.temp_max = ComboBox(self)
 
-        # 添加说明文本
-        desc_label = BodyLabel(
-            "这是一个环境数据监测与可视化系统，用于实时采集和显示环境参数。\n\n"
-            "支持以下功能：\n"
-            "• 实时显示温度、湿度、PM2.5和噪声数据\n"
-            "• 超出所设阈值报警\n"
-            "• 历史数据查询与导出\n"
-            "• 数据趋势图表分析\n"
-            "• 自定义显示设置",
-            self
-        )
-        desc_label.setWordWrap(True)
+        for i in range(0, 41):
+            self.temp_min.addItem(f"{i}")
+            self.temp_max.addItem(f"{i}")
 
-        # 添加著作权信息
-        copyright_label = CaptionLabel("© 2025春 综合工程设计 第5组。", self)
-        copyright_layout = QHBoxLayout()
-        copyright_layout.addWidget(copyright_label, 0, Qt.AlignCenter)
+        self.temp_min.setCurrentIndex(15)  # 默认15°C
+        self.temp_max.setCurrentIndex(30)  # 默认30°C
 
-        # 将所有内容添加到卡片
-        about_card.viewLayout.addLayout(icon_layout)
-        about_card.viewLayout.addLayout(name_layout)
-        about_card.viewLayout.addLayout(version_layout)
-        about_card.viewLayout.addSpacing(20)
-        about_card.viewLayout.addWidget(desc_label)
-        about_card.viewLayout.addSpacing(20)
-        about_card.viewLayout.addLayout(copyright_layout)
+        temp_range_layout = QHBoxLayout()
+        temp_range_layout.addWidget(self.temp_min)
+        temp_range_layout.addWidget(BodyLabel("至", self))
+        temp_range_layout.addWidget(self.temp_max)
 
-        layout.addWidget(about_card)
+        form_layout.addWidget(temp_label, 0, 0)
+        form_layout.addLayout(temp_range_layout, 0, 1)
+
+        # 湿度阈值
+        humidity_label = BodyLabel("湿度警报范围 (%):", self)
+        self.humidity_min = ComboBox(self)
+        self.humidity_max = ComboBox(self)
+
+        for i in range(0, 101, 5):
+            self.humidity_min.addItem(f"{i}")
+            self.humidity_max.addItem(f"{i}")
+
+        self.humidity_min.setCurrentIndex(4)  # 默认20%
+        self.humidity_max.setCurrentIndex(14)  # 默认70%
+
+        humidity_range_layout = QHBoxLayout()
+        humidity_range_layout.addWidget(self.humidity_min)
+        humidity_range_layout.addWidget(BodyLabel("至", self))
+        humidity_range_layout.addWidget(self.humidity_max)
+
+        form_layout.addWidget(humidity_label, 1, 0)
+        form_layout.addLayout(humidity_range_layout, 1, 1)
+
+        # PM2.5阈值
+        pm25_label = BodyLabel("PM2.5警报阈值 (μg/m³):", self)
+        self.pm25_threshold = ComboBox(self)
+
+        for i in range(0, 301, 25):
+            self.pm25_threshold.addItem(f"{i}")
+
+        self.pm25_threshold.setCurrentIndex(3)  # 默认75 μg/m³
+
+        form_layout.addWidget(pm25_label, 2, 0)
+        form_layout.addWidget(self.pm25_threshold, 2, 1)
+
+        # 噪声阈值
+        noise_label = BodyLabel("噪声警报阈值 (dB):", self)
+        self.noise_threshold = ComboBox(self)
+
+        for i in range(40, 91, 5):
+            self.noise_threshold.addItem(f"{i}")
+
+        self.noise_threshold.setCurrentIndex(4)  # 默认60 dB
+
+        form_layout.addWidget(noise_label, 3, 0)
+        form_layout.addWidget(self.noise_threshold, 3, 1)
+
+        # 添加到卡片
+        self.threshold_card.viewLayout.addLayout(form_layout)
+        layout.addWidget(self.threshold_card)
+
+        # 通知设置卡片
+        self.notification_card = HeaderCardWidget(self)
+        self.notification_card.setTitle("通知设置")
+        self.notification_card.setBorderRadius(8)
+
+        notification_layout = QVBoxLayout()
+
+        # 启用桌面通知
+        self.desktop_notify = RadioButton("启用桌面通知", self)
+        self.desktop_notify.setChecked(True)
+        notification_layout.addWidget(self.desktop_notify)
+
+        # 启用声音警报
+        self.sound_notify = RadioButton("启用声音警报", self)
+        self.sound_notify.setChecked(False)
+        notification_layout.addWidget(self.sound_notify)
+
+        self.notification_card.viewLayout.addLayout(notification_layout)
+        layout.addWidget(self.notification_card)
+
+        # 保存按钮
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        self.save_button = PrimaryPushButton("保存设置", self)
+        self.save_button.clicked.connect(self.save_settings)
+        button_layout.addWidget(self.save_button)
+        layout.addLayout(button_layout)
+
+        # 添加伸缩空间
         layout.addStretch()
+
+    def save_settings(self):
+        InfoBar.success(
+            title='设置已保存',
+            content='警报规则已成功保存',
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=2000,
+            parent=self.window()
+        )
+
+
+class PlotsWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("plotsWidget")
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        # 创建标题
+        self.title_label = BodyLabel("数据图表", self)
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
+        layout.addWidget(self.title_label)
+
+        # 创建图表滚动区域
+        self.scroll_area = SingleDirectionScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+            QScrollArea > QWidget {
+                background: transparent;
+            }
+        """)
+
+        # 创建图表容器
+        self.plots_container = QWidget()
+        self.plots_container.setObjectName("plotsContainerWidget")
+        self.plots_container.setStyleSheet("""
+            #plotsContainerWidget {
+                background: transparent;
+                border: none;
+            }
+        """)
+        self.plots_layout = QVBoxLayout(self.plots_container)
+        self.plots_layout.setContentsMargins(0, 0, 0, 0)
+        self.plots_layout.setSpacing(16)
+
+        # 使用当前主题创建图表
+        dark_mode = isDarkTheme()
+        self.temp_plot = PlotCard("温度趋势", "温度 (°C)", dark_mode)
+        self.humidity_plot = PlotCard("湿度趋势", "湿度 (%)", dark_mode)
+        self.pm25_plot = PlotCard("PM2.5趋势", "PM2.5 (μg/m³)", dark_mode)
+        self.noise_plot = PlotCard("噪声趋势", "噪声 (dB)", dark_mode)
+
+        # 添加图表到容器
+        self.plots_layout.addWidget(self.temp_plot)
+        self.plots_layout.addWidget(self.humidity_plot)
+        self.plots_layout.addWidget(self.pm25_plot)
+        self.plots_layout.addWidget(self.noise_plot)
+
+        # 设置滚动区域的部件
+        self.scroll_area.setWidget(self.plots_container)
+
+        # 添加滚动区域到主布局
+        layout.addWidget(self.scroll_area, 1)
+
+    def update_data(self, times=None, temp_history=None, humidity_history=None, pm25_history=None, noise_history=None):
+        """更新显示的数据"""
+        if times is not None:
+            if temp_history is not None:
+                self.temp_plot.update_data(times, temp_history)
+            if humidity_history is not None:
+                self.humidity_plot.update_data(times, humidity_history)
+            if pm25_history is not None:
+                self.pm25_plot.update_data(times, pm25_history)
+            if noise_history is not None:
+                self.noise_plot.update_data(times, noise_history)
+
+    def update_theme(self, dark_mode):
+        """更新主题"""
+        self.temp_plot.update_theme(dark_mode)
+        self.humidity_plot.update_theme(dark_mode)
+        self.pm25_plot.update_theme(dark_mode)
+        self.noise_plot.update_theme(dark_mode)
+
+
+class HomeWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("homeWidget")
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        # 删除标题文本，直接显示实时数据卡片
+        self.data_card = RealtimeDataCard(self)
+        layout.addWidget(self.data_card)
+
+        # 删除系统说明卡片，只保留数据卡片
+        layout.addStretch()
+
+    def update_data(self, temperature=None, humidity=None, pm25=None, noise=None, timestamp=None):
+        """更新显示的数据"""
+        # 更新实时数据卡片
+        self.data_card.update_data(temperature, humidity, pm25, noise, timestamp)
 
 
 class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
 
-        # 创建qss目录
-        self.create_qss_folders()
+        # 应用样式表
+        StyleSheet.MAIN_WINDOW.apply(self)
 
-        # 初始化界面
+        # 窗口设置 - 允许调整大小
         self.setWindowTitle("环境监测系统")
-        self.resize(1200, 800)
+        self.resize(960, 600)
+        self.move(100, 100)
+        self.setMinimumSize(800, 500)
 
-        # 创建亚克力效果
-        self.acrylic = AcrylicBrush(self, 30)
-        self.setStyleSheet("background: transparent")
-
-        # 设置查询时间范围
+        # 初始化变量
         self.time_range_minutes = 5
-
-        # 默认使用当前主题设置
         self.dark_mode = isDarkTheme()
+        self.data_cache = {'times': [], 'temp': [], 'humidity': [], 'pm25': [], 'noise': []}
+        self.last_known_data = None
 
-        # 创建主界面容器
-        self.main_widget = QWidget()
-        self.main_widget.setObjectName("mainWidget")
-        self.main_layout = QVBoxLayout(self.main_widget)
-        self.main_layout.setContentsMargins(20, 20, 20, 20)
-        self.main_layout.setSpacing(15)
+        # 创建界面 - 设置objectName
+        self.homeWidget = HomeWidget(self)
+        self.plotsWidget = PlotsWidget(self)
+        self.historyWidget = HistoryWidget(self)
+        self.alarmWidget = AlarmWidget(self)
+        self.settingsWidget = TimeRangeSettings(self)
 
-        # 创建图表
-        self.init_plots()
-
-        # 创建导航栏
+        # 初始化导航
         self.init_navigation()
 
-        # 定时更新数据
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_all_plots)
-        self.timer.start(2000)  # 每2秒更新一次
+        # 连接信号
+        self.settingsWidget.timeRangeChanged.connect(self.on_time_range_changed)
+        self.settingsWidget.refreshRateChanged.connect(self.set_refresh_rate)
+        self.settingsWidget.themeChanged.connect(self.on_theme_changed)
 
-        # 应用主题样式表
-        StyleSheet.MAIN_WINDOW.apply(self)
+        # 设置定时器
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_all_data)
+        self.set_refresh_rate(2)  # 默认2秒更新一次
+
+        # 第一次更新数据
+        QTimer.singleShot(100, self.update_all_data)
+
+    def cleanup(self):
+        """程序关闭前的清理工作"""
+        self.timer.stop()
 
     def create_qss_folders(self):
         """创建样式表文件夹结构"""
         import os
 
-        # 创建目录
-        os.makedirs("qss/light", exist_ok=True)
-        os.makedirs("qss/dark", exist_ok=True)
+        # 创建目录结构
+        dirs = [
+            'qss',
+            'qss/light',
+            'qss/dark'
+        ]
 
-        # 创建样式文件
-        light_style = """
-            QWidget {
-                background-color: transparent;
-                color: #333333;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QRadioButton {
-                color: #333333;
-            }
-        """
-
-        dark_style = """
-            QWidget {
-                background-color: transparent;
-                color: #ffffff;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-            QRadioButton {
-                color: #ffffff;
-            }
-        """
-
-        with open("qss/light/main_window.qss", "w") as f:
-            f.write(light_style)
-
-        with open("qss/dark/main_window.qss", "w") as f:
-            f.write(dark_style)
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
 
     def init_navigation(self):
-        # 添加导航项
-        self.addSubInterface(self.main_widget, FluentIcon.IOT, "环境监测")
+        # 添加导航项 - 使用修改后的图标
+        self.addSubInterface(self.homeWidget, FluentIcon.HOME, "主页")
+        self.addSubInterface(self.plotsWidget, FluentIcon.IOT, "数据图表")  # 修改为IOT图标
+        self.addSubInterface(self.historyWidget, FluentIcon.HISTORY, "历史记录")
+        self.addSubInterface(self.alarmWidget, FluentIcon.RINGER, "警报规则")  # 修改为RINGER图标
 
-        # 创建报警规则界面
-        self.analytics_widget = QWidget()
-        self.analytics_widget.setObjectName("alarmWidget")
-        self.addSubInterface(self.analytics_widget,
-                             FluentIcon.RINGER,
-                             "报警规则",
-                             NavigationItemPosition.SCROLL)
-
-        # 创建历史界面
-        self.history_widget = HistoryWidget()
-        self.history_widget.setObjectName("historyWidget")
-        self.addSubInterface(self.history_widget,
-                             FluentIcon.HISTORY,
-                             "历史数据",
-                             NavigationItemPosition.SCROLL)
-
-        # 添加底部导航项
-        self.navigationInterface.addSeparator()
-
-        # 创建设置界面
-        self.settings_widget = TimeRangeSettings()
-        self.settings_widget.setObjectName("settingsWidget")
-        self.settings_widget.timeRangeChanged.connect(self.on_time_range_changed)
-        self.settings_widget.refreshRateChanged.connect(self.set_refresh_rate)
-        self.settings_widget.themeChanged.connect(self.on_theme_changed)
-        self.addSubInterface(self.settings_widget,
-                             FluentIcon.SETTING,
-                             "设置",
-                             NavigationItemPosition.BOTTOM)
-
-        # 创建关于界面
-        self.about_widget = AboutWidget()
-        self.about_widget.setObjectName("aboutWidget")
-        self.addSubInterface(self.about_widget,
-                             FluentIcon.INFO,
-                             "关于",
-                             NavigationItemPosition.BOTTOM)
-
-    def init_plots(self):
-        # 修改为垂直布局，使内容自适应填充整个宽度
-        main_container = QWidget()
-        main_layout = QVBoxLayout(main_container)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-
-        # 创建容器小部件并使用垂直布局
-        self.plots_container = QWidget()
-        # 给 plots_container 添加右侧边距，确保卡片与滚动条之间有间距
-        plots_layout = QVBoxLayout(self.plots_container)
-        plots_layout.setContentsMargins(0, 0, 20, 0)  # 左、上、右、下 - 右侧添加20px边距
-        plots_layout.setSpacing(20)
-
-        # 添加实时数据卡片
-        self.realtime_card = RealtimeDataCard(self.plots_container)
-        plots_layout.addWidget(self.realtime_card)
-
-        # 创建四个图表卡片
-        self.temp_plot = PlotCard("温度", "°C", self.dark_mode)
-        self.humidity_plot = PlotCard("湿度", "%", self.dark_mode)
-        self.pm25_plot = PlotCard("PM2.5", "μg/m³", self.dark_mode)
-        self.noise_plot = PlotCard("噪声", "dB", self.dark_mode)
-
-        # 添加图表到布局
-        plots_layout.addWidget(self.temp_plot)
-        plots_layout.addWidget(self.humidity_plot)
-        plots_layout.addWidget(self.pm25_plot)
-        plots_layout.addWidget(self.noise_plot)
-
-        # 设置容器的大小策略，使其能够填充可用空间
-        self.plots_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-        # 添加图表区域到主区域
-        main_layout.addWidget(self.plots_container)
-
-        # 底部可以添加一个空白区域用于滚动余量
-        scroll_space = QWidget()
-        scroll_space.setMinimumHeight(20)  # 底部留出一点空间
-        scroll_space.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        main_layout.addWidget(scroll_space)
-
-        # 创建自定义滚动区域
-        self.scroll_area = SingleDirectionScrollArea(orient=Qt.Vertical)
-        self.scroll_area.setWidget(main_container)
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet("QScrollArea{background: transparent; border: none}")
-        self.plots_container.setStyleSheet("QWidget{background: transparent}")
-
-        # 将滚动区域添加到主布局
-        self.main_layout.addWidget(self.scroll_area)
+        # 添加设置到底部
+        self.addSubInterface(self.settingsWidget, FluentIcon.SETTING, "设置", NavigationItemPosition.BOTTOM)
 
     def on_time_range_changed(self, minutes):
         self.time_range_minutes = minutes
-        self.update_all_plots()  # 立即更新图表以反映新的时间范围
+        self.update_all_data()
 
     def set_refresh_rate(self, seconds):
-        """设置数据刷新频率"""
-        self.timer.stop()
-        self.timer.start(seconds * 1000)  # 转换为毫秒
+        # 确保至少1秒更新一次
+        seconds = max(1, seconds)
+        self.timer.start(seconds * 1000)
 
     def on_theme_changed(self, dark_mode):
-        """切换主题"""
+        # 更新主题
         self.dark_mode = dark_mode
-        theme = Theme.DARK if dark_mode else Theme.LIGHT
-        setTheme(theme)
+        setTheme(Theme.DARK if dark_mode else Theme.LIGHT)
 
-        # 更新所有图表的主题
-        self.temp_plot.update_theme(dark_mode)
-        self.humidity_plot.update_theme(dark_mode)
-        self.pm25_plot.update_theme(dark_mode)
-        self.noise_plot.update_theme(dark_mode)
+        # 更新各个组件的主题
+        self.plotsWidget.update_theme(dark_mode)
+        self.historyWidget.update_theme(dark_mode)
 
-        # 更新滚动区域样式
-        self.plots_container.setStyleSheet("QWidget{background: transparent}")
-
-        # 更新历史数据界面主题
-        self.history_widget.update_theme(dark_mode)
-
-        # 应用主题样式表
+        # 应用样式表
         StyleSheet.MAIN_WINDOW.apply(self)
+
+    def get_last_record_from_db(self):
+        """从数据库获取最后一条记录"""
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=5)
+            cursor = conn.cursor()
+
+            # 查询最后一条记录
+            cursor.execute("""
+                SELECT timestamp, temperature, humidity, pm25, noise
+                FROM sensor_data
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """)
+
+            result = cursor.fetchone()
+            conn.close()
+
+            if result:
+                return {
+                    'timestamp': result[0],
+                    'temperature': result[1],
+                    'humidity': result[2],
+                    'pm25': result[3],
+                    'noise': result[4]
+                }
+            return None
+
+        except Exception as e:
+            print(f"Error fetching last record: {e}")
+            return None
 
     def fetch_recent_data(self, minutes=5):
         """获取最近X分钟的数据"""
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(DB_PATH, timeout=5)
             cursor = conn.cursor()
 
+            # 计算起始时间
             end_time = datetime.now()
             start_time = end_time - timedelta(minutes=minutes)
 
-            cursor.execute(
-                "SELECT timestamp, temperature, humidity, pm25, noise "
-                "FROM sensor_data "
-                "WHERE timestamp BETWEEN ? AND ? "
-                "ORDER BY timestamp",
-                (start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                 end_time.strftime("%Y-%m-%d %H:%M:%S"))
-            )
+            # 格式化时间字符串
+            start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+            end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
-            data = cursor.fetchall()
+            # 执行查询
+            cursor.execute("""
+                SELECT timestamp, temperature, humidity, pm25, noise
+                FROM sensor_data
+                WHERE timestamp BETWEEN ? AND ?
+                ORDER BY timestamp ASC
+            """, (start_time_str, end_time_str))
+
+            # 清空缓存
+            self.data_cache = {'times': [], 'temp': [], 'humidity': [], 'pm25': [], 'noise': []}
+
+            # 处理结果
+            results = cursor.fetchall()
             conn.close()
-            return data
+
+            if not results:
+                # 如果没有数据，返回None
+                return None
+
+            for row in results:
+                timestamp = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S").timestamp()
+                self.data_cache['times'].append(timestamp)
+                self.data_cache['temp'].append(row[1])
+                self.data_cache['humidity'].append(row[2])
+                self.data_cache['pm25'].append(row[3])
+                self.data_cache['noise'].append(row[4])
+
+            # 保存最后一条数据
+            last_record = results[-1]
+            self.last_known_data = {
+                'timestamp': last_record[0],
+                'temperature': last_record[1],
+                'humidity': last_record[2],
+                'pm25': last_record[3],
+                'noise': last_record[4]
+            }
+
+            return self.last_known_data
+
         except Exception as e:
-            print(f"数据库查询错误: {e}")
-            return []
+            print(f"Error fetching data: {e}")
+            return None
 
-    def update_all_plots(self):
-        """更新所有图表"""
-        data = self.fetch_recent_data(self.time_range_minutes)
+    def update_all_data(self):
+        """更新所有数据显示"""
+        # 获取数据
+        latest = self.fetch_recent_data(self.time_range_minutes)
 
-        if not data:
-            return
+        # 如果没有获取到最近时间范围内的数据，使用最后一条已知数据
+        if not latest:
+            if not self.last_known_data:
+                # 尝试从数据库获取最后一条记录
+                self.last_known_data = self.get_last_record_from_db()
 
-        # 处理数据
-        times, temps, humids, pm25s, noises = [], [], [], [], []
+            latest = self.last_known_data
 
-        for row in data:
-            try:
-                t = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
-                timestamp = t.timestamp()
-                times.append(timestamp)
-                temps.append(float(row[1]))
-                humids.append(float(row[2]))
-                pm25s.append(float(row[3]))
-                noises.append(float(row[4]))
-            except (ValueError, TypeError) as e:
-                print(f"跳过错误数据行: {row}, 错误: {e}")
-                continue
-
-        # 更新各图表
-        if times:
-            self.temp_plot.update_data(times, temps)
-            self.humidity_plot.update_data(times, humids)
-            self.pm25_plot.update_data(times, pm25s)
-            self.noise_plot.update_data(times, noises)
-
-            # 更新实时数据卡片
-            self.realtime_card.update_data(
-                temperature=temps[-1] if temps else None,
-                humidity=humids[-1] if humids else None,
-                pm25=pm25s[-1] if pm25s else None,
-                noise=noises[-1] if noises else None
+        if latest:
+            # 更新主页数据
+            self.homeWidget.update_data(
+                temperature=latest['temperature'],
+                humidity=latest['humidity'],
+                pm25=latest['pm25'],
+                noise=latest['noise'],
+                timestamp=latest['timestamp']  # 传递时间戳
             )
 
-    def resizeEvent(self, event):
-        """当窗口大小变化时调用"""
-        super().resizeEvent(event)
-        # 延迟更新布局以提高性能
-        QTimer.singleShot(0, self.update_plot_layouts)
+            # 如果有数据缓存，则更新图表数据
+            if self.data_cache['times']:
+                self.plotsWidget.update_data(
+                    times=self.data_cache['times'],
+                    temp_history=self.data_cache['temp'],
+                    humidity_history=self.data_cache['humidity'],
+                    pm25_history=self.data_cache['pm25'],
+                    noise_history=self.data_cache['noise']
+                )
 
-    def update_plot_layouts(self):
-        """更新所有图表的布局"""
-        for plot in [self.temp_plot, self.humidity_plot, self.pm25_plot, self.noise_plot]:
-            plot.update()
+    def closeEvent(self, event):
+        """处理窗口关闭事件"""
+        self.cleanup()
+        super().closeEvent(event)
 
 
 if __name__ == '__main__':
+    # 捕获Ctrl+C信号
+    import signal
+
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    # 启用高DPI支持
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
     app = QApplication(sys.argv)
+
+    # 设置全局字体
+    font = app.font()
+    font.setFamily("Microsoft YaHei UI")
+    font.setPointSize(10)
+    app.setFont(font)
+
     setTheme(Theme.LIGHT)
     window = MainWindow()
     window.show()
+
+    # 确保窗口在合适的位置显示
+    desktop = app.desktop().availableGeometry()
+    windowRect = window.frameGeometry()
+    windowRect.moveCenter(desktop.center())
+    windowRect.moveTop(max(windowRect.top() - 30, 50))
+    windowRect.moveLeft(max(windowRect.left(), 50))
+    window.move(windowRect.topLeft())
+
     sys.exit(app.exec_())
