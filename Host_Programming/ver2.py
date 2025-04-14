@@ -1,26 +1,27 @@
-import sys
 import sqlite3
-import numpy as np
-from enum import Enum
+import sys
 from datetime import datetime, timedelta
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QDate
+from enum import Enum
+
+import numpy as np
+import pyqtgraph as pg
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QDate, QSize
 from PyQt5.QtGui import QFont, QColor
-from PyQt5.QtWidgets import (QApplication, QVBoxLayout, QWidget, QHBoxLayout, QFileDialog,
-                             QGridLayout, QButtonGroup, QTableWidgetItem )
+from PyQt5.QtWidgets import (QApplication, QFileDialog,
+                             QGridLayout, QTableWidgetItem, QVBoxLayout,
+                             QHBoxLayout, QWidget, QButtonGroup, QDialog)
 
 from qfluentwidgets import (
-    NavigationInterface, NavigationItemPosition, FluentWindow, FluentIcon,
+    NavigationItemPosition, FluentWindow, FluentIcon,
     ComboBox, Slider, PrimaryPushButton, StyleSheetBase, PushButton,
-    MessageBox, InfoBar, InfoBarPosition, TransparentToolButton,
-    RoundMenu, Action, setTheme, Theme, isDarkTheme, qconfig,
-    ZhDatePicker, TableWidget, SmoothMode, SingleDirectionScrollArea,
+    InfoBar, InfoBarPosition, TransparentToolButton,
+    setTheme, Theme, isDarkTheme, qconfig, CheckBox,
+    ZhDatePicker, TableWidget, SingleDirectionScrollArea,
     CardWidget, ElevatedCardWidget, HeaderCardWidget, BodyLabel,
     CaptionLabel, IconWidget, RadioButton, StrongBodyLabel
 )
 
-import pyqtgraph as pg
-
-DB_PATH = "sensor_data.db"
+DB_PATH = "db/sensor_data.db"
 
 
 class StyleSheet(StyleSheetBase, Enum):
@@ -162,6 +163,91 @@ class PlotCard(HeaderCardWidget):
 
     def update_theme(self, dark_mode):
         self.plot_widget.update_theme(dark_mode)
+
+
+class PlotsWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("plotsWidget")
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        # 创建标题
+        self.title_label = BodyLabel("数据图表", self)
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
+        layout.addWidget(self.title_label)
+
+        # 创建图表滚动区域
+        self.scroll_area = SingleDirectionScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+            QScrollArea > QWidget {
+                background: transparent;
+            }
+        """)
+
+        # 创建图表容器
+        self.plots_container = QWidget()
+        self.plots_container.setObjectName("plotsContainerWidget")
+        self.plots_container.setStyleSheet("""
+            #plotsContainerWidget {
+                background: transparent;
+                border: none;
+            }
+        """)
+        self.plots_layout = QVBoxLayout(self.plots_container)
+        self.plots_layout.setContentsMargins(0, 0, 0, 0)
+        self.plots_layout.setSpacing(16)
+
+        # 使用当前主题创建图表
+        dark_mode = isDarkTheme()
+        self.temp_plot = PlotCard("温度趋势", "温度 (°C)", dark_mode)
+        self.humidity_plot = PlotCard("湿度趋势", "湿度 (%)", dark_mode)
+        self.pm25_plot = PlotCard("PM2.5趋势", "PM2.5 (μg/m³)", dark_mode)
+        self.noise_plot = PlotCard("噪声趋势", "噪声 (dB)", dark_mode)
+
+        # 添加图表到容器
+        self.plots_layout.addWidget(self.temp_plot)
+        self.plots_layout.addWidget(self.humidity_plot)
+        self.plots_layout.addWidget(self.pm25_plot)
+        self.plots_layout.addWidget(self.noise_plot)
+
+        # 设置滚动区域的部件
+        self.scroll_area.setWidget(self.plots_container)
+
+        # 添加滚动区域到主布局
+        layout.addWidget(self.scroll_area, 1)
+
+    def update_data(self, times=None, temp_history=None, humidity_history=None, pm25_history=None, noise_history=None):
+        """更新显示的数据"""
+        if times is not None:
+            if temp_history is not None:
+                self.temp_plot.update_data(times, temp_history)
+            if humidity_history is not None:
+                self.humidity_plot.update_data(times, humidity_history)
+            if pm25_history is not None:
+                self.pm25_plot.update_data(times, pm25_history)
+            if noise_history is not None:
+                self.noise_plot.update_data(times, noise_history)
+
+    def update_theme(self, dark_mode):
+        """更新主题"""
+        self.temp_plot.update_theme(dark_mode)
+        self.humidity_plot.update_theme(dark_mode)
+        self.pm25_plot.update_theme(dark_mode)
+        self.noise_plot.update_theme(dark_mode)
 
 
 class RealtimeDataCard(HeaderCardWidget):
@@ -888,10 +974,270 @@ class HistoryWidget(QWidget):
         # 更新标题和标签颜色会由全局主题处理
 
 
+class AlarmRule:
+    """警报规则数据类"""
+
+    def __init__(self, sensor_type, condition_type, threshold, notification_type):
+        self.id = id(self)  # 使用对象ID作为唯一标识
+        self.sensor_type = sensor_type  # 'temperature', 'humidity', 'pm25', 'noise'
+        self.condition_type = condition_type  # '>=', '<', 'and', 'or'
+        self.threshold = threshold  # 阈值
+        self.notification_type = notification_type  # ['message', 'sound']
+        self.is_active = True  # 规则是否处于活动状态
+
+    def check_condition(self, value):
+        """检查条件是否满足"""
+        if self.condition_type == ">=":
+            return value >= self.threshold
+        elif self.condition_type == "<":
+            return value < self.threshold
+        return False
+
+    def get_description(self):
+        """获取规则描述"""
+        sensor_names = {
+            'temperature': '温度',
+            'humidity': '湿度',
+            'pm25': 'PM2.5',
+            'noise': '噪声'
+        }
+        condition_symbols = {
+            '>=': '≥',
+            '<': '<'
+        }
+        units = {
+            'temperature': '°C',
+            'humidity': '%',
+            'pm25': 'μg/m³',
+            'noise': 'dB'
+        }
+        notification_names = {
+            'message': '消息提醒',
+            'sound': '音频提醒',
+            'message,sound': '消息+音频'
+        }
+
+        return f"{sensor_names[self.sensor_type]} {condition_symbols[self.condition_type]} {self.threshold}{units[self.sensor_type]} → {notification_names[self.notification_type]}"
+
+
+class AlarmRuleDialog(QDialog):  # 修改为继承QDialog而不是QWidget
+    """添加警报规则对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)  # 使用QDialog初始化
+        self.setWindowTitle("添加警报规则")
+        self.resize(400, 300)
+        self.rule = None  # 存储创建的规则
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+
+        # 传感器类型卡片
+        sensor_card = HeaderCardWidget(self)
+        sensor_card.setTitle("选择指标")
+        sensor_card.setBorderRadius(8)
+        sensor_layout = QVBoxLayout()
+
+        self.temperature_radio = RadioButton("温度", sensor_card)
+        self.humidity_radio = RadioButton("湿度", sensor_card)
+        self.pm25_radio = RadioButton("PM2.5", sensor_card)
+        self.noise_radio = RadioButton("噪声", sensor_card)
+
+        self.temperature_radio.setChecked(True)
+
+        self.sensor_group = QButtonGroup(self)
+        self.sensor_group.addButton(self.temperature_radio, 0)
+        self.sensor_group.addButton(self.humidity_radio, 1)
+        self.sensor_group.addButton(self.pm25_radio, 2)
+        self.sensor_group.addButton(self.noise_radio, 3)
+
+        sensor_layout.addWidget(self.temperature_radio)
+        sensor_layout.addWidget(self.humidity_radio)
+        sensor_layout.addWidget(self.pm25_radio)
+        sensor_layout.addWidget(self.noise_radio)
+
+        sensor_card.viewLayout.addLayout(sensor_layout)
+        layout.addWidget(sensor_card)
+
+        # 条件设置卡片
+        condition_card = HeaderCardWidget(self)
+        condition_card.setTitle("设置条件")
+        condition_card.setBorderRadius(8)
+        condition_layout = QVBoxLayout()
+
+        # 条件类型
+        condition_type_layout = QHBoxLayout()
+        self.greater_equal_radio = RadioButton("大于等于", condition_card)
+        self.less_radio = RadioButton("小于", condition_card)
+
+        self.greater_equal_radio.setChecked(True)
+
+        self.condition_group = QButtonGroup(self)
+        self.condition_group.addButton(self.greater_equal_radio, 0)
+        self.condition_group.addButton(self.less_radio, 1)
+
+        condition_type_layout.addWidget(self.greater_equal_radio)
+        condition_type_layout.addWidget(self.less_radio)
+        condition_type_layout.addStretch()
+        condition_layout.addLayout(condition_type_layout)
+
+        # 阈值设置
+        threshold_layout = QHBoxLayout()
+        threshold_label = BodyLabel("阈值:", condition_card)
+        self.threshold_slider = Slider(Qt.Horizontal, condition_card)
+        self.threshold_value_label = BodyLabel("25", condition_card)
+        self.threshold_value_label.setMinimumWidth(40)
+
+        # 根据当前选择的传感器类型更新滑动条范围
+        self.temperature_radio.clicked.connect(lambda: self.update_slider_range('temperature'))
+        self.humidity_radio.clicked.connect(lambda: self.update_slider_range('humidity'))
+        self.pm25_radio.clicked.connect(lambda: self.update_slider_range('pm25'))
+        self.noise_radio.clicked.connect(lambda: self.update_slider_range('noise'))
+
+        # 初始设置温度滑动条
+        self.update_slider_range('temperature')
+
+        threshold_layout.addWidget(threshold_label)
+        threshold_layout.addWidget(self.threshold_slider)
+        threshold_layout.addWidget(self.threshold_value_label)
+        condition_layout.addLayout(threshold_layout)
+
+        condition_card.viewLayout.addLayout(condition_layout)
+        layout.addWidget(condition_card)
+
+        # 通知方式卡片
+        notification_card = HeaderCardWidget(self)
+        notification_card.setTitle("通知方式")
+        notification_card.setBorderRadius(8)
+        notification_layout = QVBoxLayout()
+
+        self.message_checkbox = CheckBox("消息提醒", notification_card)
+        self.sound_checkbox = CheckBox("音频提醒", notification_card)
+
+        self.message_checkbox.setChecked(True)
+
+        notification_layout.addWidget(self.message_checkbox)
+        notification_layout.addWidget(self.sound_checkbox)
+
+        notification_card.viewLayout.addLayout(notification_layout)
+        layout.addWidget(notification_card)
+
+        # 按钮
+        button_layout = QHBoxLayout()
+        self.cancel_button = PushButton("取消", self)
+        self.add_button = PrimaryPushButton("添加", self)
+
+        self.cancel_button.clicked.connect(self.close)
+        self.add_button.clicked.connect(self.add_rule)
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.cancel_button)
+        button_layout.addWidget(self.add_button)
+        layout.addLayout(button_layout)
+
+    def update_slider_range(self, sensor_type):
+        """根据传感器类型更新滑动条范围"""
+        if sensor_type == 'temperature':
+            self.threshold_slider.setRange(0, 40)
+            self.threshold_slider.setValue(25)
+        elif sensor_type == 'humidity':
+            self.threshold_slider.setRange(0, 100)
+            self.threshold_slider.setValue(60)
+        elif sensor_type == 'pm25':
+            self.threshold_slider.setRange(0, 300)
+            self.threshold_slider.setValue(75)
+        elif sensor_type == 'noise':
+            self.threshold_slider.setRange(0, 120)
+            self.threshold_slider.setValue(60)
+
+        self.threshold_value_label.setText(str(self.threshold_slider.value()))
+        self.threshold_slider.valueChanged.connect(
+            lambda value: self.threshold_value_label.setText(str(value))
+        )
+
+    def add_rule(self):
+        """创建并保存警报规则"""
+        # 获取传感器类型
+        sensor_types = ['temperature', 'humidity', 'pm25', 'noise']
+        sensor_type = sensor_types[self.sensor_group.checkedId()]
+
+        # 获取条件类型
+        condition_type = ">=" if self.greater_equal_radio.isChecked() else "<"
+
+        # 获取阈值
+        threshold = self.threshold_slider.value()
+
+        # 获取通知方式
+        notification_types = []
+        if self.message_checkbox.isChecked():
+            notification_types.append("message")
+        if self.sound_checkbox.isChecked():
+            notification_types.append("sound")
+
+        notification_type = ",".join(notification_types)
+
+        if not notification_type:
+            InfoBar.warning(
+                title='错误',
+                content='请至少选择一种通知方式',
+                orient=Qt.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self
+            )
+            return False  # 返回False表示未创建规则
+
+        # 创建规则并保存在dialog对象中
+        self.rule = AlarmRule(sensor_type, condition_type, threshold, notification_type)
+        self.accept()  # 接受对话框
+        return True
+
+    def accept(self):
+        self.done(1)
+
+    def reject(self):
+        self.done(0)
+
+    def done(self, r):
+        self.setParent(None)
+        self.deleteLater()
+
+
+class AlarmRuleItem(CardWidget):
+    """警报规则列表项"""
+    deleteClicked = pyqtSignal(int)
+
+    def __init__(self, rule, parent=None):
+        super().__init__(parent)
+        self.rule = rule
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+
+        # 规则描述
+        self.description_label = BodyLabel(self.rule.get_description(), self)
+        layout.addWidget(self.description_label, 1)
+
+        # 删除按钮
+        self.delete_button = TransparentToolButton(FluentIcon.DELETE, self)
+        self.delete_button.setFixedSize(32, 32)
+        self.delete_button.setIconSize(QSize(16, 16))
+        self.delete_button.clicked.connect(lambda: self.deleteClicked.emit(self.rule.id))
+        layout.addWidget(self.delete_button)
+
+
 class AlarmWidget(QWidget):
+    """警报规则管理界面"""
+    alarm_rules_changed = pyqtSignal(list)  # 当规则列表变更时发出信号
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("alarmWidget")
+        self.alarm_rules = []  # 存储所有警报规则
         self.setup_ui()
 
     def setup_ui(self):
@@ -904,119 +1250,89 @@ class AlarmWidget(QWidget):
         self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
         layout.addWidget(self.title_label)
 
-        # 创建阈值设置卡片
-        self.threshold_card = HeaderCardWidget(self)
-        self.threshold_card.setTitle("环境参数阈值设置")
-        self.threshold_card.setBorderRadius(8)
+        # 警报规则列表卡片
+        self.rules_card = HeaderCardWidget(self)
+        self.rules_card.setTitle("当前警报规则")
+        self.rules_card.setBorderRadius(8)
 
-        # 添加表单
-        form_layout = QGridLayout()
-        form_layout.setVerticalSpacing(16)
-        form_layout.setHorizontalSpacing(10)
+        # 提示信息（当没有规则时显示）
+        self.empty_hint = BodyLabel("暂无警报规则，点击下方按钮添加", self.rules_card)
+        self.empty_hint.setAlignment(Qt.AlignCenter)
+        self.empty_hint.setStyleSheet("color: var(--text-color-secondary); padding: 20px;")
+        self.rules_card.viewLayout.addWidget(self.empty_hint)
 
-        # 温度阈值
-        temp_label = BodyLabel("温度警报范围 (°C):", self)
-        self.temp_min = ComboBox(self)
-        self.temp_max = ComboBox(self)
+        # 规则列表容器
+        self.rules_container = QWidget(self.rules_card)
+        self.rules_layout = QVBoxLayout(self.rules_container)
+        self.rules_layout.setContentsMargins(0, 0, 0, 0)
+        self.rules_layout.setSpacing(8)
 
-        for i in range(0, 41):
-            self.temp_min.addItem(f"{i}")
-            self.temp_max.addItem(f"{i}")
+        # 设置规则列表滚动区域
+        self.scroll_area = SingleDirectionScrollArea(self.rules_card)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(self.rules_container)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+            QScrollArea > QWidget {
+                background: transparent;
+            }
+        """)
 
-        self.temp_min.setCurrentIndex(15)  # 默认15°C
-        self.temp_max.setCurrentIndex(30)  # 默认30°C
+        self.rules_card.viewLayout.addWidget(self.scroll_area)
 
-        temp_range_layout = QHBoxLayout()
-        temp_range_layout.addWidget(self.temp_min)
-        temp_range_layout.addWidget(BodyLabel("至", self))
-        temp_range_layout.addWidget(self.temp_max)
+        # 初始隐藏规则容器
+        self.rules_container.hide()
 
-        form_layout.addWidget(temp_label, 0, 0)
-        form_layout.addLayout(temp_range_layout, 0, 1)
+        layout.addWidget(self.rules_card)
 
-        # 湿度阈值
-        humidity_label = BodyLabel("湿度警报范围 (%):", self)
-        self.humidity_min = ComboBox(self)
-        self.humidity_max = ComboBox(self)
-
-        for i in range(0, 101, 5):
-            self.humidity_min.addItem(f"{i}")
-            self.humidity_max.addItem(f"{i}")
-
-        self.humidity_min.setCurrentIndex(4)  # 默认20%
-        self.humidity_max.setCurrentIndex(14)  # 默认70%
-
-        humidity_range_layout = QHBoxLayout()
-        humidity_range_layout.addWidget(self.humidity_min)
-        humidity_range_layout.addWidget(BodyLabel("至", self))
-        humidity_range_layout.addWidget(self.humidity_max)
-
-        form_layout.addWidget(humidity_label, 1, 0)
-        form_layout.addLayout(humidity_range_layout, 1, 1)
-
-        # PM2.5阈值
-        pm25_label = BodyLabel("PM2.5警报阈值 (μg/m³):", self)
-        self.pm25_threshold = ComboBox(self)
-
-        for i in range(0, 301, 25):
-            self.pm25_threshold.addItem(f"{i}")
-
-        self.pm25_threshold.setCurrentIndex(3)  # 默认75 μg/m³
-
-        form_layout.addWidget(pm25_label, 2, 0)
-        form_layout.addWidget(self.pm25_threshold, 2, 1)
-
-        # 噪声阈值
-        noise_label = BodyLabel("噪声警报阈值 (dB):", self)
-        self.noise_threshold = ComboBox(self)
-
-        for i in range(40, 91, 5):
-            self.noise_threshold.addItem(f"{i}")
-
-        self.noise_threshold.setCurrentIndex(4)  # 默认60 dB
-
-        form_layout.addWidget(noise_label, 3, 0)
-        form_layout.addWidget(self.noise_threshold, 3, 1)
-
-        # 添加到卡片
-        self.threshold_card.viewLayout.addLayout(form_layout)
-        layout.addWidget(self.threshold_card)
-
-        # 通知设置卡片
-        self.notification_card = HeaderCardWidget(self)
-        self.notification_card.setTitle("通知设置")
-        self.notification_card.setBorderRadius(8)
-
-        notification_layout = QVBoxLayout()
-
-        # 启用桌面通知
-        self.desktop_notify = RadioButton("启用桌面通知", self)
-        self.desktop_notify.setChecked(True)
-        notification_layout.addWidget(self.desktop_notify)
-
-        # 启用声音警报
-        self.sound_notify = RadioButton("启用声音警报", self)
-        self.sound_notify.setChecked(False)
-        notification_layout.addWidget(self.sound_notify)
-
-        self.notification_card.viewLayout.addLayout(notification_layout)
-        layout.addWidget(self.notification_card)
-
-        # 保存按钮
+        # 添加规则按钮
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        self.save_button = PrimaryPushButton("保存设置", self)
-        self.save_button.clicked.connect(self.save_settings)
-        button_layout.addWidget(self.save_button)
+        self.add_rule_button = PrimaryPushButton("添加规则", self)
+        self.add_rule_button.setIcon(FluentIcon.ADD)
+        self.add_rule_button.clicked.connect(self.show_add_rule_dialog)
+        button_layout.addWidget(self.add_rule_button)
         layout.addLayout(button_layout)
 
-        # 添加伸缩空间
+        # 填充空白
         layout.addStretch()
 
-    def save_settings(self):
+    def show_add_rule_dialog(self):
+        """显示添加规则对话框"""
+        dialog = AlarmRuleDialog(self.window())
+        if dialog.exec_():  # 现在这个方法是可用的
+            if dialog.rule:  # 检查是否成功创建了规则
+                self.add_rule(dialog.rule)
+
+    def add_rule(self, rule):
+        """添加规则到列表"""
+        self.alarm_rules.append(rule)
+
+        # 创建规则项
+        rule_item = AlarmRuleItem(rule)
+        rule_item.deleteClicked.connect(self.remove_rule)
+
+        # 添加到布局
+        self.rules_layout.addWidget(rule_item)
+
+        # 如果是第一条规则，显示规则容器并隐藏提示
+        if len(self.alarm_rules) == 1:
+            self.empty_hint.hide()
+            self.rules_container.show()
+
+        # 发出规则变更信号
+        self.alarm_rules_changed.emit(self.alarm_rules)
+
+        # 显示成功提示
         InfoBar.success(
-            title='设置已保存',
-            content='警报规则已成功保存',
+            title='添加成功',
+            content='警报规则已成功添加',
             orient=Qt.Horizontal,
             isClosable=True,
             position=InfoBarPosition.TOP,
@@ -1024,25 +1340,64 @@ class AlarmWidget(QWidget):
             parent=self.window()
         )
 
+    def remove_rule(self, rule_id):
+        """根据ID移除规则"""
+        # 找到要删除的规则
+        for i, rule in enumerate(self.alarm_rules):
+            if rule.id == rule_id:
+                # 从列表中移除规则
+                self.alarm_rules.pop(i)
 
-class PlotsWidget(QWidget):
+                # 从布局中移除对应的小部件
+                item = self.rules_layout.itemAt(i)
+                widget = item.widget()
+                self.rules_layout.removeItem(item)
+                if widget:
+                    widget.setParent(None)
+                    widget.deleteLater()
+
+                # 如果没有规则了，显示提示并隐藏规则容器
+                if not self.alarm_rules:
+                    self.empty_hint.show()
+                    self.rules_container.hide()
+
+                # 发出规则变更信号
+                self.alarm_rules_changed.emit(self.alarm_rules)
+
+                # 显示删除成功提示
+                InfoBar.success(
+                    title='删除成功',
+                    content='警报规则已成功删除',
+                    orient=Qt.Horizontal,
+                    isClosable=True,
+                    position=InfoBarPosition.TOP,
+                    duration=2000,
+                    parent=self.window()
+                )
+
+                break
+
+
+class AlarmNotificationCard(HeaderCardWidget):
+    """警报通知卡片，显示在主页上"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("plotsWidget")
-        self.setup_ui()
+        self.setTitle("警报通知")
+        self.setBorderRadius(8)
+        self.setMaximumHeight(250)
 
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        # 创建内容布局
+        self.alarm_layout = QVBoxLayout()
+        self.viewLayout.addLayout(self.alarm_layout)
 
-        # 创建标题
-        self.title_label = BodyLabel("数据图表", self)
-        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
-        layout.addWidget(self.title_label)
+        # 初始提示信息
+        self.no_alarm_label = BodyLabel("无警报", self)
+        self.no_alarm_label.setAlignment(Qt.AlignCenter)
+        self.alarm_layout.addWidget(self.no_alarm_label)
 
-        # 创建图表滚动区域
-        self.scroll_area = SingleDirectionScrollArea(self)
+        # 警报滚动区域
+        self.scroll_area = SingleDirectionScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setStyleSheet("""
@@ -1058,56 +1413,101 @@ class PlotsWidget(QWidget):
             }
         """)
 
-        # 创建图表容器
-        self.plots_container = QWidget()
-        self.plots_container.setObjectName("plotsContainerWidget")
-        self.plots_container.setStyleSheet("""
-            #plotsContainerWidget {
-                background: transparent;
-                border: none;
-            }
+        # 警报容器
+        self.alarm_container = QWidget()
+        self.alarm_container_layout = QVBoxLayout(self.alarm_container)
+        self.alarm_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.alarm_container_layout.setSpacing(8)
+
+        self.scroll_area.setWidget(self.alarm_container)
+        self.alarm_layout.addWidget(self.scroll_area)
+
+        # 初始隐藏滚动区域
+        self.scroll_area.hide()
+
+    def show_alarm(self, rule, value):
+        """显示警报"""
+        # 隐藏无警报提示
+        self.no_alarm_label.hide()
+
+        # 显示滚动区域
+        self.scroll_area.show()
+
+        # 创建警报项
+        alarm_item = ElevatedCardWidget()
+        alarm_item.setBorderRadius(6)
+
+        # 获取警报颜色
+        alarm_color = "#e11d48"  # 红色警报
+
+        # 设置警报样式
+        alarm_item.setStyleSheet(f"""
+            ElevatedCardWidget {{
+                border-left: 4px solid {alarm_color};
+            }}
         """)
-        self.plots_layout = QVBoxLayout(self.plots_container)
-        self.plots_layout.setContentsMargins(0, 0, 0, 0)
-        self.plots_layout.setSpacing(16)
 
-        # 使用当前主题创建图表
-        dark_mode = isDarkTheme()
-        self.temp_plot = PlotCard("温度趋势", "温度 (°C)", dark_mode)
-        self.humidity_plot = PlotCard("湿度趋势", "湿度 (%)", dark_mode)
-        self.pm25_plot = PlotCard("PM2.5趋势", "PM2.5 (μg/m³)", dark_mode)
-        self.noise_plot = PlotCard("噪声趋势", "噪声 (dB)", dark_mode)
+        # 警报内容布局
+        alarm_layout = QVBoxLayout(alarm_item)
+        alarm_layout.setContentsMargins(12, 10, 12, 10)
+        alarm_layout.setSpacing(4)
 
-        # 添加图表到容器
-        self.plots_layout.addWidget(self.temp_plot)
-        self.plots_layout.addWidget(self.humidity_plot)
-        self.plots_layout.addWidget(self.pm25_plot)
-        self.plots_layout.addWidget(self.noise_plot)
+        # 警报标题
+        sensor_names = {
+            'temperature': '温度警报',
+            'humidity': '湿度警报',
+            'pm25': 'PM2.5警报',
+            'noise': '噪声警报'
+        }
 
-        # 设置滚动区域的部件
-        self.scroll_area.setWidget(self.plots_container)
+        alarm_title = StrongBodyLabel(sensor_names[rule.sensor_type], alarm_item)
+        alarm_title.setStyleSheet("font-weight: bold; color: var(--text-color);")
+        alarm_layout.addWidget(alarm_title)
 
-        # 添加滚动区域到主布局
-        layout.addWidget(self.scroll_area, 1)
+        # 警报详情
+        units = {
+            'temperature': '°C',
+            'humidity': '%',
+            'pm25': 'μg/m³',
+            'noise': 'dB'
+        }
 
-    def update_data(self, times=None, temp_history=None, humidity_history=None, pm25_history=None, noise_history=None):
-        """更新显示的数据"""
-        if times is not None:
-            if temp_history is not None:
-                self.temp_plot.update_data(times, temp_history)
-            if humidity_history is not None:
-                self.humidity_plot.update_data(times, humidity_history)
-            if pm25_history is not None:
-                self.pm25_plot.update_data(times, pm25_history)
-            if noise_history is not None:
-                self.noise_plot.update_data(times, noise_history)
+        condition_symbols = {
+            '>=': '≥',
+            '<': '<'
+        }
 
-    def update_theme(self, dark_mode):
-        """更新主题"""
-        self.temp_plot.update_theme(dark_mode)
-        self.humidity_plot.update_theme(dark_mode)
-        self.pm25_plot.update_theme(dark_mode)
-        self.noise_plot.update_theme(dark_mode)
+        alarm_detail = BodyLabel(
+            f"当前值: {value}{units[rule.sensor_type]} {condition_symbols[rule.condition_type]} {rule.threshold}{units[rule.sensor_type]}",
+            alarm_item
+        )
+        alarm_detail.setStyleSheet("color: var(--text-color-secondary);")
+        alarm_layout.addWidget(alarm_detail)
+
+        # 时间戳
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        time_label = CaptionLabel(f"触发时间: {timestamp}", alarm_item)
+        time_label.setStyleSheet("color: var(--text-color-tertiary); font-size: 11px;")
+        alarm_layout.addWidget(time_label)
+
+        # 添加警报项到容器
+        self.alarm_container_layout.addWidget(alarm_item)
+
+    def clear_alarms(self):
+        """清除所有警报"""
+        # 移除所有警报项
+        while self.alarm_container_layout.count():
+            item = self.alarm_container_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+
+        # 显示无警报提示
+        self.no_alarm_label.show()
+
+        # 隐藏滚动区域
+        self.scroll_area.hide()
 
 
 class HomeWidget(QWidget):
@@ -1310,7 +1710,7 @@ class MainWindow(FluentWindow):
             return self.last_known_data
 
         except Exception as e:
-            print(f"Error fetching data: {e}")
+            print(f"Error fetching db: {e}")
             return None
 
     def update_all_data(self):

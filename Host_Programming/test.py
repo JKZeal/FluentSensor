@@ -41,7 +41,7 @@ def pack_data(sensor_data):
     header = b'\xAA\xBB\xCC\xDD'
 
     # 计算校验位
-    # checksum = calculate_checksum(data)
+    # checksum = calculate_checksum(db)
 
     # 打包数据：头 + 数据 + 校验位
     packet = header + data # + bytes([checksum])

@@ -1,12 +1,6 @@
 
-            QWidget {
-                background-color: transparent;
-                color: #ffffff;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-            QRadioButton {
-                color: #ffffff;
-            }
+        QWidget {
+            background-color: #2c2c2c;
+            color: #ffffff;
+        }
         

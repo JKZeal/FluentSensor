@@ -1,9 +1,9 @@
-import sqlite3
-from datetime import datetime
 import socket
+import sqlite3
 import struct
+from datetime import datetime
 
-DB_PATH = "sensor_data.db"
+DB_PATH = "db/sensor_data.db"
 
 def connect_to_db():
     with sqlite3.connect(DB_PATH) as conn:
