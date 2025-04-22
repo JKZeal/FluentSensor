@@ -1,13 +1,15 @@
 import json
 import os
-import uuid
-import time
 import smtplib
+import time
+import uuid
 from datetime import datetime
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from PyQt5.QtCore import QObject
 from PyQt5.QtMultimedia import QSound
+
 
 def get_project_root():
     """获取项目根目录路径"""
@@ -148,11 +150,11 @@ class AlarmManager(QObject):
                 # 规则恢复正常
                 self.recover_alarm(rule)
 
-        # 如果规则持续触发，但是是邮件规则，检查是否需要再次发送
+        # 如果规则持续触发，检查邮件是否在冷却时间
         elif is_triggered and 'email' in rule.notification_type.split(','):
-            # 检查是否需要重新发送邮件(5分钟间隔)
+            # 检查是否需要重新发送邮件(120秒钟间隔)
             current_time = time.time()
-            if current_time - rule.last_email_time > 300:  # 5分钟 = 300秒
+            if current_time - rule.last_email_time > 120:
                 self.send_email_alert(rule, current_value)
                 rule.last_email_time = current_time
 
@@ -240,7 +242,7 @@ class AlarmManager(QObject):
             print(f"发送邮件警报失败: {e}")
 
     def stop_all_alarms(self):
-        """停止所有正在播放的警报"""
+        """停止所有活动的警报"""
         for sound in self.active_sounds.values():
             sound.stop()
         self.active_sounds.clear()

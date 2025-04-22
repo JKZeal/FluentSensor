@@ -1,4 +1,5 @@
 import os
+
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QButtonGroup,
                              QStackedWidget, QGridLayout)
@@ -7,7 +8,6 @@ from qfluentwidgets import (HeaderCardWidget, BodyLabel, PrimaryPushButton, Radi
                             FluentIcon, SingleDirectionScrollArea, CardWidget,
                             SpinBox, DoubleSpinBox, MessageBoxBase, ComboBox)
 
-# 导入核心警报处理逻辑
 from alarm import (AlarmRule, AlarmManager, save_rules_to_json,
                    load_rules_from_json, get_project_root)
 
@@ -176,7 +176,7 @@ class AlarmRuleDialog(MessageBoxBase):
         self.sound_file_combobox.addItems(
             [os.path.basename(f) for f in self.sound_files] if self.sound_files else ["无可用音频文件"])
         self.sound_file_combobox.setEnabled(len(self.sound_files) > 0)
-        self.sound_file_combobox.setMinimumHeight(30)
+        self.sound_file_combobox.setMinimumHeight(28)
         sound_layout.addWidget(self.sound_file_combobox)
 
         # 邮件提醒行
@@ -189,7 +189,7 @@ class AlarmRuleDialog(MessageBoxBase):
         self.email_file_combobox.addItems(
             [os.path.basename(f) for f in self.email_files] if self.email_files else ["无可用邮件配置"])
         self.email_file_combobox.setEnabled(len(self.email_files) > 0)
-        self.email_file_combobox.setMinimumHeight(30)
+        self.email_file_combobox.setMinimumHeight(28)
         email_layout.addWidget(self.email_file_combobox)
 
         # 连接复选框状态变化信号到槽函数
@@ -500,3 +500,8 @@ class AlarmWidget(QWidget):
             sensor_value = data.get(rule.sensor_type)
             if sensor_value is not None:
                 self.alarm_manager.check_rule(rule, sensor_value)
+
+    def stop_all_alarms(self):
+        """停止所有活动的警报"""
+        if hasattr(self, 'alarm_manager'):
+            self.alarm_manager.stop_all_alarms()

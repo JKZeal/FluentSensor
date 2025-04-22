@@ -1,0 +1,9 @@
+{
+  "sender_email": "jkzeal_shanghai@163.com",
+  "receiver_email": "zhao_junkai@shu.edu.cn",
+  "smtp_server": "smtp.163.com",
+  "smtp_port": 25,
+  "smtp_username": "jkzeal_shanghai@163.com",
+  "smtp_password": "EP4n4fEcC2R3AUcv",
+  "email_template": "尊敬的用户:\n\n您的环境传感器检测到{sensor_type}指标异常,当前值{current_value}已{condition}设定阈值{threshold}。\n\n请及时检查环境状况。\n\n时间: {time}\n\n此邮件由智能环境监测系统自动发出,请勿回复。"
+}

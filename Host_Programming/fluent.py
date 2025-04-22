@@ -141,13 +141,22 @@ class MainWindow(FluentWindow):
                                              pm25_history=self.data_cache['pm25'],
                                              noise_history=self.data_cache['noise'])
 
-            # 检查警报规则
-            self.alarmWidget.check_all_rules({
-                'temperature': latest['temperature'],
-                'humidity': latest['humidity'],
-                'pm25': latest['pm25'],
-                'noise': latest['noise']
-            })
+            # 检查数据时间戳
+            current_time = datetime.now()
+            data_time = datetime.strptime(latest['timestamp'], "%Y-%m-%d %H:%M:%S")
+            time_diff = (current_time - data_time).total_seconds()
+
+            if time_diff <= 3:  # 只有当数据是最近3秒内的才检查警报规则
+                self.alarmWidget.check_all_rules({
+                    'temperature': latest['temperature'],
+                    'humidity': latest['humidity'],
+                    'pm25': latest['pm25'],
+                    'noise': latest['noise'],
+                    'timestamp': latest['timestamp']
+                })
+            else:
+                # 数据过期,停止所有警报
+                self.alarmWidget.stop_all_alarms()
 
     def closeEvent(self, event):
         self.timer.stop()

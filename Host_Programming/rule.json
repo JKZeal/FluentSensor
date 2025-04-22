@@ -1,13 +1,25 @@
 [
   {
-    "id": "6fecc759-672b-4b53-93e5-63c3aa3bc5ed",
+    "id": "54ff8310-863e-4314-90ba-d496a63ccd8c",
     "sensor_type": "temperature",
     "condition_type": ">",
     "threshold": 30.0,
     "notification_type": "email",
     "is_active": true,
     "sound_file": null,
-    "email_file": "asset\\mail1.json",
+    "email_file": "asset\\网易SMTP.json",
+    "last_email_time": 0,
+    "is_triggered": false
+  },
+  {
+    "id": "8179fcb7-56f8-49b1-aae3-5db01e8dcaf2",
+    "sensor_type": "humidity",
+    "condition_type": ">",
+    "threshold": 60.0,
+    "notification_type": "sound",
+    "is_active": true,
+    "sound_file": "asset\\叮叮叮叮.wav",
+    "email_file": null,
     "last_email_time": 0,
     "is_triggered": false
   }
