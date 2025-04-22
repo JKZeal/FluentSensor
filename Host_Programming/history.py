@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QTab
 from qfluentwidgets import (HeaderCardWidget, BodyLabel, PrimaryPushButton, PushButton,
                             ZhDatePicker, TableWidget,InfoBar, InfoBarPosition, StrongBodyLabel)
 
-DB_PATH = "db/sensor_data.db"
+DB_PATH = "db/sqlite.db"
 
 class EnvironmentStatusWidget(QWidget):
     def __init__(self, parent=None):

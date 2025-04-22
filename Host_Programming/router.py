@@ -3,10 +3,11 @@ import sqlite3
 import struct
 from datetime import datetime
 
-DB_PATH = "db/sensor_data.db"
+DB_PATH = "db/sqlite.db"
 
 def connect_to_db():
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sensor_data (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

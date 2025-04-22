@@ -6,13 +6,13 @@ from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentWindow, Theme, setTheme, isDarkTheme
 
-from alarm import AlarmWidget
+from dialog import AlarmWidget
 from history import HistoryWidget
 from home import HomeWidget
 from plot import PlotsWidget
 from setting import TimeRangeSettings, StyleSheet
 
-DB_PATH = "db/sensor_data.db"
+DB_PATH = "db/sqlite.db"
 
 class MainWindow(FluentWindow):
     def __init__(self):
@@ -82,12 +82,16 @@ class MainWindow(FluentWindow):
     def get_last_record_from_db(self):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5)
+            # 设置WAL模式
+            conn.execute("PRAGMA journal_mode=WAL")
             cursor = conn.cursor()
-            cursor.execute("SELECT timestamp, temperature, humidity, pm25, noise FROM sensor_data ORDER BY timestamp DESC LIMIT 1")
+            cursor.execute(
+                "SELECT timestamp, temperature, humidity, pm25, noise FROM sensor_data ORDER BY timestamp DESC LIMIT 1")
             result = cursor.fetchone()
             conn.close()
             if result:
-                return {'timestamp': result[0], 'temperature': result[1], 'humidity': result[2], 'pm25': result[3], 'noise': result[4]}
+                return {'timestamp': result[0], 'temperature': result[1], 'humidity': result[2], 'pm25': result[3],
+                        'noise': result[4]}
             return None
         except Exception as e:
             print(f"Error fetching last record: {e}")
@@ -96,6 +100,7 @@ class MainWindow(FluentWindow):
     def fetch_recent_data(self, minutes=5):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5)
+            conn.execute("PRAGMA journal_mode=WAL")
             cursor = conn.cursor()
             end_time = datetime.now()
             start_time = end_time - timedelta(minutes=minutes)
@@ -128,9 +133,21 @@ class MainWindow(FluentWindow):
         if not latest:
             latest = self.get_last_record_from_db()
         if latest:
-            self.homeWidget.update_data(temperature=latest['temperature'], humidity=latest['humidity'], pm25=latest['pm25'], noise=latest['noise'], timestamp=latest['timestamp'])
+            self.homeWidget.update_data(temperature=latest['temperature'], humidity=latest['humidity'],
+                                        pm25=latest['pm25'], noise=latest['noise'], timestamp=latest['timestamp'])
             if self.data_cache['times']:
-                self.plotsWidget.update_data(times=self.data_cache['times'], temp_history=self.data_cache['temp'], humidity_history=self.data_cache['humidity'], pm25_history=self.data_cache['pm25'], noise_history=self.data_cache['noise'])
+                self.plotsWidget.update_data(times=self.data_cache['times'], temp_history=self.data_cache['temp'],
+                                             humidity_history=self.data_cache['humidity'],
+                                             pm25_history=self.data_cache['pm25'],
+                                             noise_history=self.data_cache['noise'])
+
+            # 检查警报规则
+            self.alarmWidget.check_all_rules({
+                'temperature': latest['temperature'],
+                'humidity': latest['humidity'],
+                'pm25': latest['pm25'],
+                'noise': latest['noise']
+            })
 
     def closeEvent(self, event):
         self.timer.stop()

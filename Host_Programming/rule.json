@@ -1,34 +1,14 @@
 [
   {
-    "id": "427a0280-804c-43cb-bbe5-441435e55ba1",
+    "id": "6fecc759-672b-4b53-93e5-63c3aa3bc5ed",
     "sensor_type": "temperature",
-    "condition_type": ">=",
-    "threshold": 25.0,
-    "notification_type": "sound",
-    "is_active": true
-  },
-  {
-    "id": "918cd9c8-77d3-4730-85b7-d282df8231c4",
-    "sensor_type": "temperature",
-    "condition_type": "<",
-    "threshold": -5.0,
-    "notification_type": "sound",
-    "is_active": true
-  },
-  {
-    "id": "29536139-3e2b-4050-903a-9ace1975f903",
-    "sensor_type": "pm25",
-    "condition_type": ">=",
-    "threshold": 75,
-    "notification_type": "sound,email",
-    "is_active": true
-  },
-  {
-    "id": "03a15cee-7111-4f30-b168-7b3bc13f1ae6",
-    "sensor_type": "noise",
-    "condition_type": ">=",
-    "threshold": 60,
+    "condition_type": ">",
+    "threshold": 30.0,
     "notification_type": "email",
-    "is_active": true
+    "is_active": true,
+    "sound_file": null,
+    "email_file": "asset\\mail1.json",
+    "last_email_time": 0,
+    "is_triggered": false
   }
 ]
