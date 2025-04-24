@@ -1,154 +1,181 @@
-# 隐藏终端窗口
-if ($host.Name -eq 'ConsoleHost') {
-    Add-Type -Name Window -Namespace Console -MemberDefinition '
-        [DllImport("Kernel32.dll")]
-        public static extern IntPtr GetConsoleWindow();
-        [DllImport("user32.dll")]
-        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    '
-    $consolePtr = [Console.Window]::GetConsoleWindow()
-    [void][Console.Window]::ShowWindow($consolePtr, 0)
+# 添加必要的命名空间
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# 创建主窗体
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "数据发送工具"
+$form.Size = New-Object System.Drawing.Size(500, 600)
+$form.StartPosition = "CenterScreen"
+$form.Font = New-Object System.Drawing.Font("Microsoft YaHei UI", 9)
+
+# 函数：在控制台输出日志
+function WriteLog($message) {
+    Write-Host $message
 }
 
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+# 创建网络设置组
+$networkGroupBox = New-Object System.Windows.Forms.GroupBox
+$networkGroupBox.Text = "网络设置"
+$networkGroupBox.Location = New-Object System.Drawing.Point(20, 20)
+$networkGroupBox.Size = New-Object System.Drawing.Size(440, 100)
 
-# 定义XAML界面
-[xml]$xaml = @"
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="数据发送工具" Height="360" Width="500"
-    FontFamily="Microsoft YaHei UI"
-    WindowStartupLocation="CenterScreen">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        
-        <!-- 顶部区域 - 网络设置和数据模式 -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            
-            <GroupBox Grid.Column="0" Header="网络设置" Margin="0,0,5,0">
-                <Grid Margin="5">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <Label Grid.Row="0" Grid.Column="0" Content="IP地址:" Margin="0,5" />
-                    <TextBox Name="ipTextBox" Grid.Row="0" Grid.Column="1" Margin="5" Text="127.0.0.1" />
-                    
-                    <Label Grid.Row="1" Grid.Column="0" Content="端口:" Margin="0,5" />
-                    <TextBox Name="portTextBox" Grid.Row="1" Grid.Column="1" Margin="5" Text="5000" />
-                    
-                    <Button Name="connectButton" Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
-                            Content="连接" Width="70" Margin="5" />
-                </Grid>
-            </GroupBox>
-            
-            <GroupBox Grid.Column="1" Header="数据模式" Margin="5,0,0,0">
-                <StackPanel Margin="10">
-                    <RadioButton Name="randomDataRadio" Content="随机数据" IsChecked="True" Margin="0,5" />
-                    <RadioButton Name="fixedDataRadio" Content="固定数据" Margin="0,5" />
-                </StackPanel>
-            </GroupBox>
-        </Grid>
-        
-        <!-- 中部区域 - 数据设置和发送模式 -->
-        <Grid Grid.Row="1" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            
-            <GroupBox Grid.Column="0" Header="数据设置" Margin="0,0,5,0">
-                <Grid Margin="5">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <Label Grid.Row="0" Grid.Column="0" Content="温度(int16):" Margin="0,5" />
-                    <TextBox Name="tempTextBox" Grid.Row="0" Grid.Column="1" Margin="5" IsEnabled="False" Text="25.0" />
-                    
-                    <Label Grid.Row="0" Grid.Column="2" Content="PM2.5(uint16):" Margin="0,5" />
-                    <TextBox Name="pm25TextBox" Grid.Row="0" Grid.Column="3" Margin="5" IsEnabled="False" Text="50" />
-                    
-                    <Label Grid.Row="1" Grid.Column="0" Content="湿度(uint16):" Margin="0,5" />
-                    <TextBox Name="humidityTextBox" Grid.Row="1" Grid.Column="1" Margin="5" IsEnabled="False" Text="50.0" />
-                    
-                    <Label Grid.Row="1" Grid.Column="2" Content="噪声(uint8):" Margin="0,5" />
-                    <TextBox Name="noiseTextBox" Grid.Row="1" Grid.Column="3" Margin="5" IsEnabled="False" Text="50" />
-                </Grid>
-            </GroupBox>
-            
-            <GroupBox Grid.Column="1" Header="发送模式" Margin="5,0,0,0">
-                <Grid Margin="5">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <Button Name="sendOnceButton" Grid.Row="0" Content="单次发送" Margin="5,5,5,10" Padding="5" />
-                    
-                    <Grid Grid.Row="1">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        
-                        <Button Name="autoSendButton" Grid.Column="0" Content="自动发送" Margin="5" />
-                        
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-                            <TextBlock Text="间隔:" Margin="2,0" />
-                            <TextBox Name="intervalTextBox" Width="30" Text="2" Margin="2,0" />
-                            <TextBlock Text="秒" Margin="2,0" />
-                        </StackPanel>
-                    </Grid>
-                </Grid>
-            </GroupBox>
-        </Grid>
-        
-        <!-- 底部区域 - 状态信息 -->
-        <GroupBox Grid.Row="2" Header="状态信息">
-            <TextBlock Name="statusLabel" Text="未连接" VerticalAlignment="Center" 
-                      HorizontalAlignment="Center" TextWrapping="Wrap" Margin="10" />
-        </GroupBox>
-    </Grid>
-</Window>
-"@
+$ipLabel = New-Object System.Windows.Forms.Label
+$ipLabel.Text = "IP地址:"
+$ipLabel.Location = New-Object System.Drawing.Point(20, 30)
+$ipLabel.Size = New-Object System.Drawing.Size(70, 20)
 
-# 加载XAML
-$reader = [System.Xml.XmlNodeReader]::new($xaml)
-$window = [System.Windows.Markup.XamlReader]::Load($reader)
+$ipTextBox = New-Object System.Windows.Forms.TextBox
+$ipTextBox.Text = "127.0.0.1"
+$ipTextBox.Location = New-Object System.Drawing.Point(100, 30)
+$ipTextBox.Size = New-Object System.Drawing.Size(150, 20)
 
-# 获取控件引用
-$controls = @{}
-$xaml.SelectNodes("//*[@Name]") | ForEach-Object {
-    $controls[$_.Name] = $window.FindName($_.Name)
-}
+$portLabel = New-Object System.Windows.Forms.Label
+$portLabel.Text = "端口:"
+$portLabel.Location = New-Object System.Drawing.Point(270, 30)
+$portLabel.Size = New-Object System.Drawing.Size(50, 20)
+
+$portTextBox = New-Object System.Windows.Forms.TextBox
+$portTextBox.Text = "5000"
+$portTextBox.Location = New-Object System.Drawing.Point(330, 30)
+$portTextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+$connectButton = New-Object System.Windows.Forms.Button
+$connectButton.Text = "连接"
+$connectButton.Location = New-Object System.Drawing.Point(170, 60)
+$connectButton.Size = New-Object System.Drawing.Size(100, 30)
+
+# 数据模式组
+$dataGroupBox = New-Object System.Windows.Forms.GroupBox
+$dataGroupBox.Text = "数据模式"
+$dataGroupBox.Location = New-Object System.Drawing.Point(20, 130)
+$dataGroupBox.Size = New-Object System.Drawing.Size(440, 70)
+
+$randomDataRadio = New-Object System.Windows.Forms.RadioButton
+$randomDataRadio.Text = "随机数据"
+$randomDataRadio.Checked = $true
+$randomDataRadio.Location = New-Object System.Drawing.Point(100, 30)
+$randomDataRadio.Size = New-Object System.Drawing.Size(100, 20)
+
+$fixedDataRadio = New-Object System.Windows.Forms.RadioButton
+$fixedDataRadio.Text = "固定数据"
+$fixedDataRadio.Location = New-Object System.Drawing.Point(250, 30)
+$fixedDataRadio.Size = New-Object System.Drawing.Size(100, 20)
+
+# 数据设置组
+$dataSettingsGroupBox = New-Object System.Windows.Forms.GroupBox
+$dataSettingsGroupBox.Text = "数据设置"
+$dataSettingsGroupBox.Location = New-Object System.Drawing.Point(20, 210)
+$dataSettingsGroupBox.Size = New-Object System.Drawing.Size(440, 160)
+
+$tempLabel = New-Object System.Windows.Forms.Label
+$tempLabel.Text = "温度:"
+$tempLabel.Location = New-Object System.Drawing.Point(20, 30)
+$tempLabel.Size = New-Object System.Drawing.Size(90, 20)
+
+$tempTextBox = New-Object System.Windows.Forms.TextBox
+$tempTextBox.Text = "20.0"
+$tempTextBox.Enabled = $false
+$tempTextBox.Location = New-Object System.Drawing.Point(120, 30)
+$tempTextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+$humidityLabel = New-Object System.Windows.Forms.Label
+$humidityLabel.Text = "湿度:"
+$humidityLabel.Location = New-Object System.Drawing.Point(20, 70)
+$humidityLabel.Size = New-Object System.Drawing.Size(90, 20)
+
+$humidityTextBox = New-Object System.Windows.Forms.TextBox
+$humidityTextBox.Text = "40.0"
+$humidityTextBox.Enabled = $false
+$humidityTextBox.Location = New-Object System.Drawing.Point(120, 70)
+$humidityTextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+$pm25Label = New-Object System.Windows.Forms.Label
+$pm25Label.Text = "PM2.5:"
+$pm25Label.Location = New-Object System.Drawing.Point(230, 30)
+$pm25Label.Size = New-Object System.Drawing.Size(90, 20)
+
+$pm25TextBox = New-Object System.Windows.Forms.TextBox
+$pm25TextBox.Text = "40"
+$pm25TextBox.Enabled = $false
+$pm25TextBox.Location = New-Object System.Drawing.Point(330, 30)
+$pm25TextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+$noiseLabel = New-Object System.Windows.Forms.Label
+$noiseLabel.Text = "噪声:"
+$noiseLabel.Location = New-Object System.Drawing.Point(230, 70)
+$noiseLabel.Size = New-Object System.Drawing.Size(90, 20)
+
+$noiseTextBox = New-Object System.Windows.Forms.TextBox
+$noiseTextBox.Text = "40"
+$noiseTextBox.Enabled = $false
+$noiseTextBox.Location = New-Object System.Drawing.Point(330, 70)
+$noiseTextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+# 范围显示的标签
+$rangeLabel = New-Object System.Windows.Forms.Label
+$rangeLabel.Text = "-20~+60°C|0~100%|PM2.5:0~999ug|0~120dB"
+$rangeLabel.Location = New-Object System.Drawing.Point(20, 120)
+$rangeLabel.Size = New-Object System.Drawing.Size(400, 20)
+$rangeLabel.Font = New-Object System.Drawing.Font("Microsoft YaHei UI", 8)
+
+# 发送设置组
+$sendSettingsGroupBox = New-Object System.Windows.Forms.GroupBox
+$sendSettingsGroupBox.Text = "发送设置"
+$sendSettingsGroupBox.Location = New-Object System.Drawing.Point(20, 380)
+$sendSettingsGroupBox.Size = New-Object System.Drawing.Size(440, 120)
+
+$sendCountLabel = New-Object System.Windows.Forms.Label
+$sendCountLabel.Text = "发送次数:"
+$sendCountLabel.Location = New-Object System.Drawing.Point(20, 30)
+$sendCountLabel.Size = New-Object System.Drawing.Size(70, 20)
+
+$sendCountTextBox = New-Object System.Windows.Forms.TextBox
+$sendCountTextBox.Text = "1"
+$sendCountTextBox.Location = New-Object System.Drawing.Point(100, 30)
+$sendCountTextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+$intervalLabel = New-Object System.Windows.Forms.Label
+$intervalLabel.Text = "间隔(ms):"
+$intervalLabel.Location = New-Object System.Drawing.Point(200, 30)
+$intervalLabel.Size = New-Object System.Drawing.Size(70, 20)
+
+$intervalTextBox = New-Object System.Windows.Forms.TextBox
+$intervalTextBox.Text = "2000"
+$intervalTextBox.Location = New-Object System.Drawing.Point(280, 30)
+$intervalTextBox.Size = New-Object System.Drawing.Size(80, 20)
+
+# 发送按钮和停止按钮
+$sendButton = New-Object System.Windows.Forms.Button
+$sendButton.Text = "发送"
+$sendButton.Location = New-Object System.Drawing.Point(120, 70)
+$sendButton.Size = New-Object System.Drawing.Size(90, 35)
+
+$stopButton = New-Object System.Windows.Forms.Button
+$stopButton.Text = "终止"
+$stopButton.Location = New-Object System.Drawing.Point(240, 70)
+$stopButton.Size = New-Object System.Drawing.Size(90, 35)
+$stopButton.Enabled = $false
+
+# 添加控件到窗体
+$networkGroupBox.Controls.AddRange(@($ipLabel, $ipTextBox, $portLabel, $portTextBox, $connectButton))
+$dataGroupBox.Controls.AddRange(@($randomDataRadio, $fixedDataRadio))
+$dataSettingsGroupBox.Controls.AddRange(@($tempLabel, $tempTextBox, $humidityLabel, $humidityTextBox, $pm25Label, $pm25TextBox, $noiseLabel, $noiseTextBox, $rangeLabel))
+$sendSettingsGroupBox.Controls.AddRange(@($sendCountLabel, $sendCountTextBox, $intervalLabel, $intervalTextBox, $sendButton, $stopButton))
+
+$form.Controls.AddRange(@($networkGroupBox, $dataGroupBox, $dataSettingsGroupBox, $sendSettingsGroupBox))
 
 # 全局变量
 $script:clientSocket = $null
-$script:timer = New-Object System.Windows.Threading.DispatcherTimer
-$script:timer.Interval = [TimeSpan]::FromSeconds(2)
+$script:timer = New-Object System.Windows.Forms.Timer
+$script:timer.Interval = 2000
+$script:remainingSends = 0
+
+# 用于生成连续变化的随机数据
+$script:lastTemp = 20.0
+$script:lastHumidity = 40.0
+$script:lastPM25 = 40
+$script:lastNoise = 40
 
 # 数据处理函数
 function ValidateNumber($value, $min, $max, $default, $decimals = 0) {
@@ -164,24 +191,41 @@ function ValidateNumber($value, $min, $max, $default, $decimals = 0) {
     }
 }
 
+# 生成平滑变化的随机数
+function SmoothRandomValue($lastValue, $min, $max, $maxChange, $decimals = 0) {
+    $rnd = Get-Random -Minimum -1.0 -Maximum 1.0
+    $change = $rnd * $maxChange
+    $newValue = $lastValue + $change
+    $newValue = [Math]::Max($min, [Math]::Min($max, $newValue))
+    if ($decimals -gt 0) {
+        return [Math]::Round($newValue, $decimals)
+    }
+    return [int]$newValue
+}
+
 # 发送数据
 function SendData {
     try {
         # 获取要发送的数据
-        if ($controls.randomDataRadio.IsChecked) {
-            $rnd = New-Object Random
+        if ($randomDataRadio.Checked) {
+            # 生成平滑变化的随机数据
+            $script:lastTemp = SmoothRandomValue $script:lastTemp -10 40 1.5 1
+            $script:lastHumidity = SmoothRandomValue $script:lastHumidity 20 80 2.5 1
+            $script:lastPM25 = SmoothRandomValue $script:lastPM25 10 300 15
+            $script:lastNoise = SmoothRandomValue $script:lastNoise 30 90 5
+            
             $data = @{
-                temperature = [Math]::Round($rnd.NextDouble() * 50 - 10, 1) # -10.0 到 40.0
-                humidity = [Math]::Round($rnd.NextDouble() * 60 + 20, 1)    # 20.0 到 80.0
-                pm25 = $rnd.Next(10, 301)                                   # 10 到 300
-                noise = $rnd.Next(30, 91)                                   # 30 到 90
+                temperature = $script:lastTemp
+                humidity = $script:lastHumidity
+                pm25 = $script:lastPM25
+                noise = $script:lastNoise
             }
         } else {
             $data = @{
-                temperature = ValidateNumber $controls.tempTextBox.Text -20 60 25 1
-                humidity = ValidateNumber $controls.humidityTextBox.Text 0 100 50 1
-                pm25 = ValidateNumber $controls.pm25TextBox.Text 0 999 50
-                noise = ValidateNumber $controls.noiseTextBox.Text 0 120 50
+                temperature = ValidateNumber $tempTextBox.Text -20 60 20 1
+                humidity = ValidateNumber $humidityTextBox.Text 0 100 40 1
+                pm25 = ValidateNumber $pm25TextBox.Text 0 999 40
+                noise = ValidateNumber $noiseTextBox.Text 0 120 40
             }
         }
         
@@ -216,149 +260,194 @@ function SendData {
         $bw.Close()
         $ms.Close()
         
-        # 更新状态
-        $controls.statusLabel.Text = "已发送: 温度=$($data.temperature)°C, " + 
-                               "湿度=$($data.humidity)%, " +
-                               "PM2.5=$($data.pm25)μg/m³, " +
-                               "噪声=$($data.noise)dB"
+        # 更新计数
+        $script:remainingSends = $script:remainingSends - 1
+        if ($script:remainingSends -le 0) {
+            StopSending
+        }
+
+        WriteLog "已发送: 温度=$($data.temperature)°C, 湿度=$($data.humidity)%, PM2.5=$($data.pm25)μg/m³, 噪声=$($data.noise)dB"
     }
     catch {
-        [System.Windows.MessageBox]::Show("发送数据失败: $($_.Exception.Message)", 
-            "发送错误", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
-        StopAutoSend
+        WriteLog "发送数据失败: $($_.Exception.Message)"
+        StopSending
         DisconnectSocket
     }
 }
 
-# 停止自动发送
-function StopAutoSend {
-    if ($script:timer.IsEnabled) {
-        $script:timer.Stop()
-        $controls.autoSendButton.Content = "自动发送"
-        if ($null -ne $script:clientSocket) {
-            $controls.statusLabel.Text = "已连接"
-        }
+# 停止发送
+function StopSending {
+    $script:timer.Stop()
+    $sendButton.Enabled = $true
+    $stopButton.Enabled = $false
+    $script:remainingSends = 0
+    
+    if ($null -ne $script:clientSocket) {
+        WriteLog "已停止发送数据"
     }
 }
 
 # 断开连接
 function DisconnectSocket {
     if ($null -ne $script:clientSocket) {
-        $script:clientSocket.Close()
-        $script:clientSocket.Dispose()
+        try {
+            $script:clientSocket.Close()
+            $script:clientSocket.Dispose()
+        } catch {
+            # 忽略关闭时的错误
+        }
         $script:clientSocket = $null
         
-        $controls.connectButton.Content = "连接"
-        $controls.statusLabel.Text = "未连接"
-        $controls.ipTextBox.IsEnabled = $true
-        $controls.portTextBox.IsEnabled = $true
+        $connectButton.Text = "连接"
+        $ipTextBox.Enabled = $true
+        $portTextBox.Enabled = $true
+        $sendButton.Enabled = $false
+        
+        WriteLog "已断开连接"
     }
 }
 
-# 设置事件处理
-$controls.randomDataRadio.Add_Checked({
-    $controls.tempTextBox.IsEnabled = $false
-    $controls.humidityTextBox.IsEnabled = $false
-    $controls.pm25TextBox.IsEnabled = $false
-    $controls.noiseTextBox.IsEnabled = $false
+# 事件处理
+$randomDataRadio.Add_Click({
+    $tempTextBox.Enabled = $false
+    $humidityTextBox.Enabled = $false
+    $pm25TextBox.Enabled = $false
+    $noiseTextBox.Enabled = $false
+    WriteLog "已切换到随机数据模式"
 })
 
-$controls.fixedDataRadio.Add_Checked({
-    $controls.tempTextBox.IsEnabled = $true
-    $controls.humidityTextBox.IsEnabled = $true
-    $controls.pm25TextBox.IsEnabled = $true
-    $controls.noiseTextBox.IsEnabled = $true
+$fixedDataRadio.Add_Click({
+    $tempTextBox.Enabled = $true
+    $humidityTextBox.Enabled = $true
+    $pm25TextBox.Enabled = $true
+    $noiseTextBox.Enabled = $true
+    WriteLog "已切换到固定数据模式"
 })
 
-$controls.connectButton.Add_Click({
+$connectButton.Add_Click({
     if ($null -eq $script:clientSocket) {
         try {
-            $host = $controls.ipTextBox.Text
-            $port = [int]::Parse($controls.portTextBox.Text)
+            $hostAddress = $ipTextBox.Text
+            $port = [int]::Parse($portTextBox.Text)
+            
+            WriteLog "正在连接到 $hostAddress`:$port..."
             
             $script:clientSocket = New-Object System.Net.Sockets.TcpClient
-            $script:clientSocket.Connect($host, $port)
+            # 设置连接超时为5秒
+            $result = $script:clientSocket.BeginConnect($hostAddress, $port, $null, $null)
+            $success = $result.AsyncWaitHandle.WaitOne(5000, $false)
             
-            $controls.connectButton.Content = "断开"
-            $controls.statusLabel.Text = "已连接到 $host`:$port"
-            $controls.ipTextBox.IsEnabled = $false
-            $controls.portTextBox.IsEnabled = $false
+            if (-not $success) {
+                throw "连接超时，请检查服务器是否启动"
+            }
+            
+            # 完成连接过程
+            $script:clientSocket.EndConnect($result)
+            
+            $connectButton.Text = "断开"
+            $ipTextBox.Enabled = $false
+            $portTextBox.Enabled = $false
+            $sendButton.Enabled = $true
+            
+            WriteLog "成功连接到 $hostAddress`:$port"
         }
         catch {
-            [System.Windows.MessageBox]::Show("无法连接到服务器: $($_.Exception.Message)", 
-                "连接错误", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
-            $script:clientSocket = $null
+            if ($null -ne $script:clientSocket) {
+                try {
+                    $script:clientSocket.Close()
+                } catch {}
+                $script:clientSocket = $null
+            }
+            
+            WriteLog "无法连接到服务器: $($_.Exception.Message)"
         }
     }
     else {
-        StopAutoSend
+        StopSending
         DisconnectSocket
     }
 })
 
-$controls.sendOnceButton.Add_Click({
+$sendButton.Add_Click({
     if ($null -eq $script:clientSocket) {
-        [System.Windows.MessageBox]::Show("请先连接到服务器", 
-            "未连接", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+        WriteLog "请先连接到服务器"
         return
     }
-    SendData
-})
-
-$controls.autoSendButton.Add_Click({
-    if ($script:timer.IsEnabled) {
-        StopAutoSend
-    }
-    else {
-        if ($null -eq $script:clientSocket) {
-            [System.Windows.MessageBox]::Show("请先连接到服务器", 
-                "未连接", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-            return
-        }
-        
-        $interval = ValidateNumber $controls.intervalTextBox.Text 1 60 2
-        $controls.intervalTextBox.Text = $interval
-        
-        $script:timer.Interval = [TimeSpan]::FromSeconds($interval)
+    
+    $count = ValidateNumber $sendCountTextBox.Text 1 1000 1
+    $sendCountTextBox.Text = $count.ToString()
+    
+    $interval = ValidateNumber $intervalTextBox.Text 100 60000 2000
+    $intervalTextBox.Text = $interval.ToString()
+    
+    $script:remainingSends = $count
+    $script:timer.Interval = $interval
+    
+    if ($count -eq 1) {
+        # 单次发送
+        WriteLog "开始单次发送"
+        SendData
+    } else {
+        # 多次发送
+        $sendButton.Enabled = $false
+        $stopButton.Enabled = $true
+        WriteLog "开始多次发送 (共$count次，间隔$interval毫秒)"
+        SendData
         $script:timer.Start()
-        $controls.autoSendButton.Content = "停止自动发送"
-        $controls.statusLabel.Text = "自动发送中 (每${interval}秒)"
     }
 })
 
-# 数值验证处理器
-$numberValidationFields = @(
-    @{Control = $controls.tempTextBox; Min = -20; Max = 60; Default = 25; Decimals = 1},
-    @{Control = $controls.humidityTextBox; Min = 0; Max = 100; Default = 50; Decimals = 1},
-    @{Control = $controls.pm25TextBox; Min = 0; Max = 999; Default = 50},
-    @{Control = $controls.noiseTextBox; Min = 0; Max = 120; Default = 50},
-    @{Control = $controls.intervalTextBox; Min = 1; Max = 60; Default = 2}
-)
+$stopButton.Add_Click({
+    WriteLog "用户手动停止发送"
+    StopSending
+})
 
-foreach ($field in $numberValidationFields) {
-    $field.Control.Add_LostFocus({
-        param($sender, $e)
-        
-        $fieldInfo = $numberValidationFields | Where-Object { $_.Control -eq $sender }
-        $value = ValidateNumber $sender.Text $fieldInfo.Min $fieldInfo.Max $fieldInfo.Default $fieldInfo.Decimals
-        
-        if ($fieldInfo.Decimals) {
-            $format = "F$($fieldInfo.Decimals)"
-            $sender.Text = $value.ToString($format)
-        } else {
-            $sender.Text = $value.ToString()
-        }
-    })
-}
+# 数值验证
+$tempTextBox.Add_Leave({
+    $tempTextBox.Text = (ValidateNumber $tempTextBox.Text -20 60 20 1).ToString("F1")
+})
+
+$humidityTextBox.Add_Leave({
+    $humidityTextBox.Text = (ValidateNumber $humidityTextBox.Text 0 100 40 1).ToString("F1")
+})
+
+$pm25TextBox.Add_Leave({
+    $pm25TextBox.Text = (ValidateNumber $pm25TextBox.Text 0 999 40).ToString()
+})
+
+$noiseTextBox.Add_Leave({
+    $noiseTextBox.Text = (ValidateNumber $noiseTextBox.Text 0 120 40).ToString()
+})
+
+$sendCountTextBox.Add_Leave({
+    $sendCountTextBox.Text = (ValidateNumber $sendCountTextBox.Text 1 1000 1).ToString()
+})
+
+$intervalTextBox.Add_Leave({
+    $intervalTextBox.Text = (ValidateNumber $intervalTextBox.Text 100 60000 2000).ToString()
+})
 
 # 定时器事件
-$script:timer.Add_Tick({ SendData })
+$script:timer.Add_Tick({
+    if ($script:remainingSends -gt 0) {
+        SendData
+    } else {
+        StopSending
+    }
+})
 
-# 关闭窗口事件
-$window.Add_Closing({
-    StopAutoSend
+# 启动时的初始状态
+$sendButton.Enabled = $false
+
+# 在窗口关闭时清理
+$form.Add_FormClosing({
+    WriteLog "程序正在关闭..."
+    StopSending
     DisconnectSocket
 })
 
+# 向控制台输出程序启动信息
+WriteLog "数据发送工具已启动"
+
 # 显示窗口
-[void]$window.ShowDialog()
+[void]$form.ShowDialog()
