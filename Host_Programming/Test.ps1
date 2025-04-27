@@ -126,7 +126,7 @@ $sendSettingsGroupBox.Location = New-Object System.Drawing.Point(20, 380)
 $sendSettingsGroupBox.Size = New-Object System.Drawing.Size(440, 120)
 
 $sendCountLabel = New-Object System.Windows.Forms.Label
-$sendCountLabel.Text = "发送次数:"
+$sendCountLabel.Text = "次数:"
 $sendCountLabel.Location = New-Object System.Drawing.Point(20, 30)
 $sendCountLabel.Size = New-Object System.Drawing.Size(70, 20)
 
@@ -136,12 +136,12 @@ $sendCountTextBox.Location = New-Object System.Drawing.Point(100, 30)
 $sendCountTextBox.Size = New-Object System.Drawing.Size(80, 20)
 
 $intervalLabel = New-Object System.Windows.Forms.Label
-$intervalLabel.Text = "间隔(ms):"
+$intervalLabel.Text = "间隔ms:"
 $intervalLabel.Location = New-Object System.Drawing.Point(200, 30)
 $intervalLabel.Size = New-Object System.Drawing.Size(70, 20)
 
 $intervalTextBox = New-Object System.Windows.Forms.TextBox
-$intervalTextBox.Text = "2000"
+$intervalTextBox.Text = "1000"
 $intervalTextBox.Location = New-Object System.Drawing.Point(280, 30)
 $intervalTextBox.Size = New-Object System.Drawing.Size(80, 20)
 
@@ -213,7 +213,7 @@ function SendData {
             $script:lastHumidity = SmoothRandomValue $script:lastHumidity 20 80 2.5 1
             $script:lastPM25 = SmoothRandomValue $script:lastPM25 10 300 15
             $script:lastNoise = SmoothRandomValue $script:lastNoise 30 90 5
-            
+
             $data = @{
                 temperature = $script:lastTemp
                 humidity = $script:lastHumidity
@@ -228,38 +228,38 @@ function SendData {
                 noise = ValidateNumber $noiseTextBox.Text 0 120 40
             }
         }
-        
+
         # 打包数据
         $ms = New-Object IO.MemoryStream
         $bw = New-Object IO.BinaryWriter($ms)
-        
+
         # 添加头部
         $bw.Write([byte]0xAA)
         $bw.Write([byte]0xBB)
         $bw.Write([byte]0xCC)
         $bw.Write([byte]0xDD)
-        
+
         # 以网络字节序(大端)写入数据
         $tempBytes = [BitConverter]::GetBytes([int16]($data.temperature * 10))
         if ([BitConverter]::IsLittleEndian) { [Array]::Reverse($tempBytes) }
         $bw.Write($tempBytes)
-        
+
         $humidityBytes = [BitConverter]::GetBytes([uint16]($data.humidity * 10))
         if ([BitConverter]::IsLittleEndian) { [Array]::Reverse($humidityBytes) }
         $bw.Write($humidityBytes)
-        
+
         $pm25Bytes = [BitConverter]::GetBytes([uint16]$data.pm25)
         if ([BitConverter]::IsLittleEndian) { [Array]::Reverse($pm25Bytes) }
         $bw.Write($pm25Bytes)
-        
+
         $bw.Write([byte]$data.noise)
-        
+
         # 发送数据
         $packet = $ms.ToArray()
         $script:clientSocket.GetStream().Write($packet, 0, $packet.Length)
         $bw.Close()
         $ms.Close()
-        
+
         # 更新计数
         $script:remainingSends = $script:remainingSends - 1
         if ($script:remainingSends -le 0) {
@@ -281,7 +281,7 @@ function StopSending {
     $sendButton.Enabled = $true
     $stopButton.Enabled = $false
     $script:remainingSends = 0
-    
+
     if ($null -ne $script:clientSocket) {
         WriteLog "已停止发送数据"
     }
@@ -297,12 +297,12 @@ function DisconnectSocket {
             # 忽略关闭时的错误
         }
         $script:clientSocket = $null
-        
+
         $connectButton.Text = "连接"
         $ipTextBox.Enabled = $true
         $portTextBox.Enabled = $true
         $sendButton.Enabled = $false
-        
+
         WriteLog "已断开连接"
     }
 }
@@ -329,26 +329,26 @@ $connectButton.Add_Click({
         try {
             $hostAddress = $ipTextBox.Text
             $port = [int]::Parse($portTextBox.Text)
-            
+
             WriteLog "正在连接到 $hostAddress`:$port..."
-            
+
             $script:clientSocket = New-Object System.Net.Sockets.TcpClient
             # 设置连接超时为5秒
             $result = $script:clientSocket.BeginConnect($hostAddress, $port, $null, $null)
             $success = $result.AsyncWaitHandle.WaitOne(5000, $false)
-            
+
             if (-not $success) {
                 throw "连接超时，请检查服务器是否启动"
             }
-            
+
             # 完成连接过程
             $script:clientSocket.EndConnect($result)
-            
+
             $connectButton.Text = "断开"
             $ipTextBox.Enabled = $false
             $portTextBox.Enabled = $false
             $sendButton.Enabled = $true
-            
+
             WriteLog "成功连接到 $hostAddress`:$port"
         }
         catch {
@@ -358,7 +358,7 @@ $connectButton.Add_Click({
                 } catch {}
                 $script:clientSocket = $null
             }
-            
+
             WriteLog "无法连接到服务器: $($_.Exception.Message)"
         }
     }
@@ -373,16 +373,16 @@ $sendButton.Add_Click({
         WriteLog "请先连接到服务器"
         return
     }
-    
+
     $count = ValidateNumber $sendCountTextBox.Text 1 1000 1
     $sendCountTextBox.Text = $count.ToString()
-    
+
     $interval = ValidateNumber $intervalTextBox.Text 100 60000 2000
     $intervalTextBox.Text = $interval.ToString()
-    
+
     $script:remainingSends = $count
     $script:timer.Interval = $interval
-    
+
     if ($count -eq 1) {
         # 单次发送
         WriteLog "开始单次发送"

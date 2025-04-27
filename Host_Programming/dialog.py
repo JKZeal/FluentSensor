@@ -119,9 +119,9 @@ class AlarmRuleDialog(MessageBoxBase):
         self.humidity_input.setValue(60.0)
         self.humidity_input.setSuffix(" %")
 
-        # PM2.5输入 (0~999, 整数)
+        # PM2.5输入 (0~1000, 整数)
         self.pm25_input = SpinBox(condition_card)
-        self.pm25_input.setRange(0, 999)
+        self.pm25_input.setRange(0, 1000)
         self.pm25_input.setSingleStep(1)
         self.pm25_input.setValue(75)
         self.pm25_input.setSuffix(" μg/m³")
