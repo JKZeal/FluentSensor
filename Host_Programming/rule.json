@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "id": "f5ed88a6-fc34-4f55-8b08-dc9927d3f1c1",
+    "sensor_type": "temperature",
+    "condition_type": ">",
+    "threshold": 33.0,
+    "notification_type": "sound",
+    "is_active": true,
+    "sound_file": "asset\\叮叮叮叮.wav",
+    "email_file": null,
+    "last_email_time": 0,
+    "is_triggered": true,
+    "recovery_notified": false
+  },
+  {
+    "id": "07ca6b0e-9866-4a3e-ae49-5216ce6c3b02",
+    "sensor_type": "noise",
+    "condition_type": ">",
+    "threshold": 60,
+    "notification_type": "email",
+    "is_active": true,
+    "sound_file": null,
+    "email_file": "asset\\网易SMTP.json",
+    "last_email_time": 0,
+    "is_triggered": false,
+    "recovery_notified": true
+  }
+]

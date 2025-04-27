@@ -6,7 +6,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QButtonGroup,
 from qfluentwidgets import (HeaderCardWidget, BodyLabel, PrimaryPushButton, RadioButton,
                             CheckBox, InfoBar, InfoBarPosition, TransparentToolButton,
                             FluentIcon, SingleDirectionScrollArea, CardWidget,
-                            SpinBox, DoubleSpinBox, MessageBoxBase, ComboBox)
+                            SpinBox, DoubleSpinBox, MessageBoxBase, ComboBox,
+                            SwitchButton, StrongBodyLabel, SubtitleLabel, CaptionLabel)
 
 from alarm import (AlarmRule, AlarmManager, save_rules_to_json,
                    load_rules_from_json, get_project_root)
@@ -293,6 +294,7 @@ class AlarmRuleDialog(MessageBoxBase):
 class AlarmRuleItem(CardWidget):
     """报警规则项UI组件"""
     deleteClicked = pyqtSignal(str)  # 使用字符串ID
+    switchChanged = pyqtSignal(str, bool)  # 规则ID和开关状态
 
     def __init__(self, rule, parent=None):
         super().__init__(parent)
@@ -301,20 +303,122 @@ class AlarmRuleItem(CardWidget):
 
     def setup_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(16)
 
-        self.description_label = BodyLabel(self.rule.get_description(), self)
-        layout.addWidget(self.description_label, 1)
+        # 启用/禁用开关
+        self.switch_button = SwitchButton(self)
+        self.switch_button.setChecked(self.rule.is_active)
+        self.switch_button.setOnText("启用")
+        self.switch_button.setOffText("禁用")
+        self.switch_button.checkedChanged.connect(self.on_switch_changed)
+        layout.addWidget(self.switch_button)
 
+        # 中间部分: 规则信息
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(5)
+
+        # 顶部部分: 传感器和条件
+        rule_title_layout = QHBoxLayout()
+
+        # 传感器图标和名称
+        sensor_icons = {
+            'temperature': FluentIcon.CALORIES,
+            'humidity': FluentIcon.CLOUD,
+            'pm25': FluentIcon.LEAF,
+            'noise': FluentIcon.SPEAKERS
+        }
+        sensor_names = {
+            'temperature': '温度',
+            'humidity': '湿度',
+            'pm25': 'PM2.5',
+            'noise': '噪声'
+        }
+
+        icon_button = TransparentToolButton(sensor_icons.get(self.rule.sensor_type, FluentIcon.RINGER), self)
+        icon_button.setIconSize(QSize(20, 20))
+        icon_button.setFixedSize(28, 28)
+        rule_title_layout.addWidget(icon_button)
+
+        # 传感器名称和条件
+        condition_text = f"{sensor_names.get(self.rule.sensor_type, '未知')} {self.rule.condition_type} {self.rule.threshold}"
+        units = {
+            'temperature': '°C',
+            'humidity': '%',
+            'pm25': 'μg/m³',
+            'noise': 'dB'
+        }
+        condition_text += units.get(self.rule.sensor_type, '')
+
+        condition_label = StrongBodyLabel(condition_text, self)
+        rule_title_layout.addWidget(condition_label)
+        rule_title_layout.addStretch(1)
+
+        info_layout.addLayout(rule_title_layout)
+
+        # 底部部分: 通知方式
+        notification_layout = QHBoxLayout()
+        notification_layout.setSpacing(8)
+
+        notification_types = self.rule.notification_type.split(',')
+
+        # 通知方式图标
+        if 'sound' in notification_types:
+            sound_icon = TransparentToolButton(FluentIcon.MUSIC, self)
+            sound_icon.setToolTip("音频提醒")
+            sound_icon.setIconSize(QSize(14, 14))
+            sound_icon.setFixedSize(20, 20)
+            notification_layout.addWidget(sound_icon)
+
+            if self.rule.sound_file:
+                sound_file = os.path.basename(self.rule.sound_file)
+                sound_label = CaptionLabel(sound_file, self)
+                notification_layout.addWidget(sound_label)
+
+        if 'email' in notification_types:
+            email_icon = TransparentToolButton(FluentIcon.MAIL, self)
+            email_icon.setToolTip("邮件提醒")
+            email_icon.setIconSize(QSize(14, 14))
+            email_icon.setFixedSize(20, 20)
+            notification_layout.addWidget(email_icon)
+
+            if self.rule.email_file:
+                email_file = os.path.basename(self.rule.email_file)
+                email_label = CaptionLabel(email_file, self)
+                notification_layout.addWidget(email_label)
+
+        notification_layout.addStretch(1)
+        info_layout.addLayout(notification_layout)
+
+        layout.addLayout(info_layout, 1)  # 信息部分占据大部分空间
+
+        # 删除按钮
         self.delete_button = TransparentToolButton(FluentIcon.DELETE, self)
-        self.delete_button.setFixedSize(32, 32)
         self.delete_button.setIconSize(QSize(16, 16))
+        self.delete_button.setFixedSize(32, 32)
+        self.delete_button.setToolTip("删除规则")
         self.delete_button.clicked.connect(self.on_delete_clicked)
         layout.addWidget(self.delete_button)
+
+        # 设置样式
+        self.setAttribute(Qt.WA_StyledBackground)
+        if not self.rule.is_active:
+            self.setStyleSheet("AlarmRuleItem { opacity: 0.7; }")
 
     def on_delete_clicked(self):
         # 发出删除信号，携带当前规则的 ID
         self.deleteClicked.emit(self.rule.id)
+
+    def on_switch_changed(self, checked):
+        # 更新规则状态
+        self.rule.is_active = checked
+        # 根据开关状态更新卡片样式
+        if checked:
+            self.setStyleSheet("AlarmRuleItem { opacity: 1.0; }")
+        else:
+            self.setStyleSheet("AlarmRuleItem { opacity: 0.7; }")
+        # 发出信号
+        self.switchChanged.emit(self.rule.id, checked)
 
 
 class AlarmWidget(QWidget):
@@ -334,18 +438,18 @@ class AlarmWidget(QWidget):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(8)
 
         # 标题
         self.title_label = BodyLabel("警报规则", self)
-        self.title_label.setStyleSheet("font-size: 22px; font-weight: 600; margin-bottom: 10px;")
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: 500; margin-bottom: 10px;")
         layout.addWidget(self.title_label)
 
         # 警报规则卡片
         self.rules_card = HeaderCardWidget(self)
         self.rules_card.setTitle("已启用的规则")
         self.rules_card.setBorderRadius(8)
-        self.rules_card.setFixedHeight(320)
+        self.rules_card.setFixedHeight(420)
 
         # 没有规则时显示的提示
         self.empty_hint = BodyLabel("暂无警报规则，点击下方按钮添加", self.rules_card)
@@ -357,7 +461,7 @@ class AlarmWidget(QWidget):
         self.rules_container = QWidget(self.rules_card)
         self.rules_layout = QVBoxLayout(self.rules_container)
         self.rules_layout.setContentsMargins(0, 0, 0, 0)
-        self.rules_layout.setSpacing(8)
+        self.rules_layout.setSpacing(6)
 
         # 滚动区域
         self.scroll_area = SingleDirectionScrollArea(self.rules_card)
@@ -404,6 +508,7 @@ class AlarmWidget(QWidget):
         self.alarm_rules.append(rule)
         rule_item = AlarmRuleItem(rule)
         rule_item.deleteClicked.connect(self.remove_rule)
+        rule_item.switchChanged.connect(self.toggle_rule_active)
         self.rules_layout.addWidget(rule_item)
 
         if len(self.alarm_rules) == 1:
@@ -425,6 +530,22 @@ class AlarmWidget(QWidget):
                 duration=2000,
                 parent=self.window()
             )
+
+    def toggle_rule_active(self, rule_id, is_active):
+        """启用/禁用规则"""
+        for rule in self.alarm_rules:
+            if rule.id == rule_id:
+                rule.is_active = is_active
+                # 如果规则正在触发警报且被禁用，停止警报
+                if not is_active and rule.is_triggered:
+                    self.alarm_manager.recover_alarm(rule)
+                break
+
+        # 保存规则到文件
+        save_rules_to_json(self.alarm_rules)
+
+        # 通知规则已更改
+        self.alarm_rules_changed.emit(self.alarm_rules)
 
     def remove_rule(self, rule_id):
         """删除指定ID的警报规则"""

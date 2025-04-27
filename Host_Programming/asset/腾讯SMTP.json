@@ -5,5 +5,6 @@
   "smtp_port": 587,
   "smtp_username": "525940131@qq.com",
   "smtp_password": "ajbmqvwzxfbrcaej",
-  "email_template": "尊敬的用户:\n\n您的环境传感器检测到{sensor_type}指标异常,当前值{current_value}已{condition}设定阈值{threshold}。\n\n请及时检查环境状况。\n\n时间: {time}\n\n此邮件由智能环境监测系统自动发出,请勿回复。"
+  "alarm_template": "尊敬的用户:\n\n您的环境传感器检测到{sensor_type}指标异常,当前值{current_value}已{condition}设定阈值{threshold}。\n\n请及时检查环境状况。\n\n时间: {time}\n\n此邮件由智能环境监测系统自动发出,请勿回复。",
+  "recovery_template": "尊敬的用户:\n\n您的环境传感器检测到{sensor_type}指标已恢复正常。\n\n当前值: {current_value}\n阈值: {threshold}\n条件: {condition}\n恢复时间: {time}\n\n此邮件由智能环境监测系统自动发出,请勿回复。"
 }

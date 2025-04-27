@@ -3,7 +3,7 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 Write-Host "脚本路径: $scriptPath" -ForegroundColor Cyan
 
 # venv环境中Python解释器的路径
-$venvPath = Join-Path -Path $scriptPath -ChildPath "venv"
+$venvPath = Join-Path -Path $scriptPath -ChildPath ".venv"
 $pythonPath = Join-Path -Path $venvPath -ChildPath "Scripts\python.exe"
 
 # 输出路径以便调试
