@@ -162,49 +162,23 @@ class MainWindow(FluentWindow):
         self.timer.stop()
         super().closeEvent(event)
 
-def start_fluent_gui():
-    """启动 Fluent UI 主应用程序"""
+if __name__ == '__main__':
     import signal
-    signal.signal(signal.SIGINT, signal.SIG_DFL) # 允许 Ctrl+C 终止
-
-    # 检查是否已有 QApplication 实例，如果没有则创建
-    app = QApplication.instance()
-    if app is None:
-        # 设置高DPI支持 (仅在创建新实例时设置)
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-        app = QApplication(sys.argv)
-
-    # 设置字体
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    app = QApplication(sys.argv)
     font = app.font()
     font.setFamily("Microsoft YaHei UI")
     font.setPointSize(10)
     app.setFont(font)
-
-    # 设置初始主题
     setTheme(Theme.LIGHT)
-
-    # 创建并显示主窗口
     window = MainWindow()
     window.show()
-
-    # 窗口居中显示
-    try:
-        desktop = app.desktop().availableGeometry()
-        windowRect = window.frameGeometry()
-        windowRect.moveCenter(desktop.center())
-        # 稍微向上移动一点
-        windowRect.moveTop(max(windowRect.top() - 30, 50))
-        windowRect.moveLeft(max(windowRect.left(), 50))
-        window.move(windowRect.topLeft())
-    except AttributeError:
-        # 处理 desktop() 可能不存在的情况 (例如在某些环境中)
-        pass
-
-    # 启动事件循环 (必须在独立进程中运行)
+    desktop = app.desktop().availableGeometry()
+    windowRect = window.frameGeometry()
+    windowRect.moveCenter(desktop.center())
+    windowRect.moveTop(max(windowRect.top() - 30, 50))
+    windowRect.moveLeft(max(windowRect.left(), 50))
+    window.move(windowRect.topLeft())
     sys.exit(app.exec_())
-
-
-
-if __name__ == '__main__':
-    start_fluent_gui()

@@ -1,6 +1,7 @@
 import socket
 import sqlite3
 import struct
+import time
 from datetime import datetime
 
 DB_PATH = "db/sqlite.db"
@@ -34,7 +35,6 @@ def save_to_db(data):
         ))
 
 def unpack_data(packet):
-    # 解析头（4 字节）
     header = packet[:4]
     if header != b'\xAA\xBB\xCC\xDD':
         raise ValueError("Invalid header")
@@ -55,39 +55,67 @@ def unpack_data(packet):
     }
 
 def receive_tcp_data(host='0.0.0.0', port=5000):
+    print(f"数据接收服务启动中 ({host}:{port})...")
     connect_to_db()
 
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((host, port))
-    server_socket.listen(1)
-    print(f"Listening on {host}:{port}...")
-
     try:
-        while True:
-            client_socket, client_address = server_socket.accept()
-            print(f"Connection from {client_address}")
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # 设置SOL_SOCKET和SO_REUSEADDR选项，以便服务可以快速重启
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((host, port))
+        server_socket.listen(1)
+        # 设置超时，以便能够响应中断
+        server_socket.settimeout(1.0)
+        print(f"数据接收服务已启动，监听 {host}:{port}")
 
+        while True:
             try:
-                while True:
-                    packet = client_socket.recv(12)
-                    if not packet:
-                        break
-                    try:
-                        sensor_data = unpack_data(packet)
-                        print(f"Received: {sensor_data}")
-                        save_to_db(sensor_data)
-                    except ValueError as e:
-                        print(f"Error parsing packet: {e}")
+                client_socket, client_address = server_socket.accept()
+                print(f"新连接：来自 {client_address}")
+
+                try:
+                    # 设置客户端连接超时
+                    client_socket.settimeout(1.0)
+                    while True:
+                        try:
+                            packet = client_socket.recv(12)
+                            if not packet:
+                                break
+                            try:
+                                sensor_data = unpack_data(packet)
+                                print(f"接收数据: {sensor_data}")
+                                save_to_db(sensor_data)
+                            except ValueError as e:
+                                print(f"数据包解析错误: {e}")
+                        except socket.timeout:
+                            # 接收超时，继续下一次尝试
+                            continue
+                        except Exception as e:
+                            print(f"接收数据出错: {e}")
+                            break
+                except Exception as e:
+                    print(f"处理连接时出错: {e}")
+                finally:
+                    client_socket.close()
+                    print(f"连接已关闭: {client_address}")
+            except socket.timeout:
+                # 接受连接超时，继续循环等待
+                continue
             except Exception as e:
-                print(f"Error during communication: {e}")
-            finally:
-                client_socket.close()
-                print(f"Connection to {client_address} closed")
+                print(f"接受连接时出错: {e}")
+                # 等待一会再继续尝试
+                time.sleep(1)
+                
     except KeyboardInterrupt:
-        print("Server shutdown requested.")
+        print("服务关闭请求已接收")
+    except Exception as e:
+        print(f"服务发生错误: {e}")
     finally:
-        server_socket.close()
-        print("Server closed.")
+        try:
+            server_socket.close()
+            print("数据接收服务已关闭")
+        except:
+            pass
 
 if __name__ == "__main__":
     receive_tcp_data()
