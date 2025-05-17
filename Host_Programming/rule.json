@@ -9,21 +9,8 @@
     "sound_file": "asset\\嘟嘟嘟嘟.wav",
     "email_file": null,
     "last_email_time": 0,
-    "is_triggered": false,
+    "is_triggered": true,
     "recovery_notified": false
-  },
-  {
-    "id": "4aa262ff-b4ec-44ba-8978-974bed5fc1ca",
-    "sensor_type": "noise",
-    "condition_type": ">",
-    "threshold": 50,
-    "notification_type": "email",
-    "is_active": false,
-    "sound_file": null,
-    "email_file": "asset\\网易SMTP.json",
-    "last_email_time": 1745990306.1295204,
-    "is_triggered": false,
-    "recovery_notified": true
   },
   {
     "id": "29923d9e-46c3-469e-975b-7b2616202d9a",
@@ -34,6 +21,32 @@
     "is_active": false,
     "sound_file": "asset\\叮叮叮叮.wav",
     "email_file": null,
+    "last_email_time": 0,
+    "is_triggered": false,
+    "recovery_notified": true
+  },
+  {
+    "id": "e9b69a5e-7298-46dc-9bfe-fd47444dbc0e",
+    "sensor_type": "noise",
+    "condition_type": ">",
+    "threshold": 60,
+    "notification_type": "sound",
+    "is_active": false,
+    "sound_file": "asset\\叮叮叮叮.wav",
+    "email_file": null,
+    "last_email_time": 0,
+    "is_triggered": false,
+    "recovery_notified": true
+  },
+  {
+    "id": "2e361a50-ec27-4c84-b6c3-b11126e418d7",
+    "sensor_type": "noise",
+    "condition_type": ">",
+    "threshold": 60,
+    "notification_type": "email",
+    "is_active": false,
+    "sound_file": null,
+    "email_file": "asset\\网易SMTP.json",
     "last_email_time": 0,
     "is_triggered": false,
     "recovery_notified": true

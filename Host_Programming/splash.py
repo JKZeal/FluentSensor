@@ -1,178 +1,132 @@
+# splash_client_simplified.py
 import sys
 import multiprocessing
 import time
 import os
 
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QLabel
 from PyQt5.QtGui import QFont
 from qfluentwidgets import ProgressRing, setTheme, Theme, CardWidget, isDarkTheme
 
-# --- 辅助函数，用于在独立进程中运行目标脚本 (保持不变) ---
-def start_script_in_process(script_name, entry_function_name):
+def start_script_in_process(script_name, entry_function_name, *args_for_entry):
     module_name = script_name.replace(".py", "")
     try:
         module = __import__(module_name)
         entry_function = getattr(module, entry_function_name)
-        entry_function()
+        if args_for_entry:
+            print(f"INFO: Splash Process - Calling {module_name}.{entry_function_name} with args: {args_for_entry}")
+            entry_function(*args_for_entry)
+        else:
+            print(f"INFO: Splash Process - Calling {module_name}.{entry_function_name} without args")
+            entry_function()
+        print(f"INFO: Splash Process - {module_name}.{entry_function_name} finished.")
     except ImportError as e:
-        print(f"ERROR: Splash - Could not import module {module_name}: {e}", file=sys.stderr)
+        print(f"ERROR: Splash Process - Could not import module {module_name}: {e}", file=sys.stderr)
     except AttributeError as e:
-        print(f"ERROR: Splash - Could not find entry function {entry_function_name} in {module_name}: {e}", file=sys.stderr)
+        print(f"ERROR: Splash Process - Could not find entry function {entry_function_name} in {module_name}: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"ERROR: Splash - Exception in {module_name} process: {e}", file=sys.stderr)
+        print(f"ERROR: Splash Process - Exception in {module_name} ({entry_function_name}) process: {e}", file=sys.stderr)
 
+class SplashScreenClientSimplified(CardWidget):
+    ROUTER_TARGET_IP = "192.168.4.1"  # 默认连接的 IP
+    ROUTER_TARGET_PORT = 6666        # 默认连接的端口
 
-# --- 工作线程类，用于后台启动进程 ---
-class ProcessLauncherThread(QThread):
-    # 信号定义：参数 (状态文本, 百分比, 是否成功)
-    update_progress_signal = pyqtSignal(str, int, bool)
-    finished_signal = pyqtSignal(bool, list) # 参数 (是否所有进程都成功, 错误消息列表)
-
-    def __init__(self):
-        super().__init__()
-        self.router_process = None
-        self.fluent_process = None
-
-    def run(self):
-        all_ok = True
-        error_messages = []
-        current_progress = 10 # 初始进度
-
-        try:
-            self.update_progress_signal.emit("正在初始化...", current_progress, True)
-            time.sleep(0.5) # 短暂模拟初始化
-
-            # 1. 启动 Router 服务
-            current_progress = 40
-            self.update_progress_signal.emit("启动数据服务...", current_progress, True)
-            self.router_process = multiprocessing.Process(
-                target=start_script_in_process,
-                args=("router.py", "receive_tcp_data"),
-                daemon=False
-            )
-            self.router_process.start()
-            time.sleep(1) # 给进程一点时间启动
-
-            if not self.router_process.is_alive():
-                all_ok = False
-                error_messages.append("数据服务未能启动。")
-                self.update_progress_signal.emit("数据服务启动失败!", current_progress, False) # 失败时也更新
-            else:
-                self.update_progress_signal.emit("数据服务已启动。", current_progress, True)
-                print("INFO: Splash Thread - Router process started.")
-
-            # 2. 启动 Fluent 主程序 (仅当 router 成功时)
-            if all_ok:
-                current_progress = 70
-                self.update_progress_signal.emit("启动主程序...", current_progress, True)
-                self.fluent_process = multiprocessing.Process(
-                    target=start_script_in_process,
-                    args=("fluent.py", "start_fluent_application"),
-                    daemon=False
-                )
-                self.fluent_process.start()
-                time.sleep(1) # 给GUI更多时间
-
-                if not self.fluent_process.is_alive():
-                    all_ok = False
-                    error_messages.append("主程序未能启动。")
-                    self.update_progress_signal.emit("主程序启动失败!", current_progress, False)
-                    if self.router_process and self.router_process.is_alive():
-                        print("INFO: Splash Thread - Terminating router due to fluent failure.")
-                        self.router_process.terminate()
-                        self.router_process.join(timeout=1)
-                else:
-                    current_progress = 100
-                    self.update_progress_signal.emit("主程序已启动。", current_progress, True)
-                    print("INFO: Splash Thread - Fluent process started.")
-            else: # 如果router失败，直接跳过fluent的启动
-                self.update_progress_signal.emit("因依赖服务失败，主程序未启动。", current_progress, False)
-
-
-        except Exception as e:
-            all_ok = False
-            error_messages.append(f"启动时发生意外错误: {e}")
-            self.update_progress_signal.emit(f"发生错误: {e}", current_progress, False)
-            print(f"ERROR: Splash Thread - Exception during process startup: {e}", file=sys.stderr)
-
-        self.finished_signal.emit(all_ok, error_messages)
-
-    def get_processes(self):
-        return self.router_process, self.fluent_process
-
-
-class SplashScreen(CardWidget):
     def __init__(self, parent_app, parent=None):
         super().__init__(parent)
         self.parent_app = parent_app
-        self.launcher_thread = None # 初始化线程变量
+        self.router_process = None
+        self.fluent_process = None
+        self.processes_launched_successfully = False # 标志位
 
-        setTheme(Theme.LIGHT)
+        setTheme(Theme.LIGHT) # 或者 Theme.DARK
         self.init_ui()
-
-        # 启动后台线程
-        self.start_launcher_thread()
+        self.start_background_processes()
 
     def init_ui(self):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.SplashScreen)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setFixedSize(300, 220) # 可以稍微调大一点以容纳更长的文本
+        self.setFixedSize(300, 200) # 稍微调整大小
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(25, 25, 25, 25) # 增加边距
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.addStretch(1)
 
         self.progressRing = ProgressRing(self)
-        self.progressRing.setFixedSize(80, 80) # 稍大一点的环
-        self.progressRing.setStrokeWidth(6)
-        self.progressRing.setRange(0, 100)
+        self.progressRing.setFixedSize(70, 70)
+        self.progressRing.setStrokeWidth(5)
+        self.progressRing.setRange(0, 100) # 我们会模拟进度
         self.progressRing.setValue(0)
         self.progressRing.setTextVisible(True)
 
         layout.addWidget(self.progressRing, 0, Qt.AlignCenter)
-        layout.addSpacing(20) # 增加间距
+        layout.addSpacing(15)
 
-        self.statusLabel = QLabel("请稍候...", self)
-        font = QFont("Microsoft YaHei UI", 11) # 稍大一点的字体
+        self.statusLabel = QLabel("正在准备...", self)
+        font = QFont("Microsoft YaHei UI", 10)
         self.statusLabel.setFont(font)
         self.statusLabel.setAlignment(Qt.AlignCenter)
-        self.statusLabel.setWordWrap(True) # 允许文本换行
+        self.statusLabel.setWordWrap(True)
         if isDarkTheme():
              self.statusLabel.setStyleSheet("color: #E0E0E0;")
         else:
-            self.statusLabel.setStyleSheet("color: #303030;") # 更深的灰色
+            self.statusLabel.setStyleSheet("color: #303030;")
 
         layout.addWidget(self.statusLabel, 0, Qt.AlignCenter)
         layout.addStretch(1)
         self.center_on_screen()
 
-    def start_launcher_thread(self):
-        self.launcher_thread = ProcessLauncherThread()
-        self.launcher_thread.update_progress_signal.connect(self.handle_progress_update)
-        self.launcher_thread.finished_signal.connect(self.handle_launch_finished)
-        self.launcher_thread.start() # 启动线程
+    def start_background_processes(self):
+        # 模拟进度更新
+        self.statusLabel.setText("启动数据服务...")
+        self.progressRing.setValue(30)
+        if self.parent_app: self.parent_app.processEvents()
 
-    def handle_progress_update(self, status_text, percentage, success):
-        self.statusLabel.setText(status_text)
-        self.progressRing.setValue(percentage)
-        # 可以根据 success 参数改变进度环颜色，但 qfluentwidgets.ProgressRing 可能不直接支持
-        # if not success:
-        #     self.progressRing.setStyleSheet("QProgressBar::chunk { background-color: red; }") # 示例
-        if self.parent_app:
-            self.parent_app.processEvents()
+        print("INFO: Splash - Starting router.py process...")
+        self.router_process = multiprocessing.Process(
+            target=start_script_in_process,
+            args=("router", "run_tcp_client", self.ROUTER_TARGET_IP, self.ROUTER_TARGET_PORT),
+            daemon=True # 设置为守护进程，如果splash意外退出，它也会退出
+                        # 但如果fluent成功启动，fluent的生命周期会更长
+        )
+        self.router_process.start()
+        time.sleep(0.1)
 
-    def handle_launch_finished(self, all_ok, error_messages):
-        if all_ok:
-            self.statusLabel.setText("启动完成!")
-            self.progressRing.setValue(100) # 确保最终是100%
-            QTimer.singleShot(700, self.close_splash_and_exit)
-        else:
-            final_error_message = "启动失败。\n" + "\n".join(error_messages) if error_messages else "未知启动错误。"
-            self.statusLabel.setText(error_messages[0] if error_messages else "启动失败")
-            # self.progressRing.setValue(0) # 或者保持在失败时的进度
-            print(final_error_message, file=sys.stderr)
-            QTimer.singleShot(6000, self.close_splash_and_exit)
+        if not self.router_process.is_alive():
+            print("ERROR: Splash - router.py process failed to start.", file=sys.stderr)
+            self.statusLabel.setText("数据服务启动失败!")
+            self.progressRing.setValue(50) # 更新到某个表示失败的进度
+            QTimer.singleShot(3000, self.close_and_exit_app) # 失败则退出整个应用
+            return
+
+        self.statusLabel.setText("启动主界面...")
+        self.progressRing.setValue(60)
+        if self.parent_app: self.parent_app.processEvents()
+        print("INFO: Splash - Starting fluent.py process...")
+        self.fluent_process = multiprocessing.Process(
+            target=start_script_in_process,
+            args=("fluent", "start_fluent_application"), # fluent.py 的入口
+            daemon=False # 主GUI不应是守护进程
+        )
+        self.fluent_process.start()
+        time.sleep(0.1)
+
+        if not self.fluent_process.is_alive():
+            print("ERROR: Splash - fluent.py process failed to start.", file=sys.stderr)
+            self.statusLabel.setText("主界面启动失败!")
+            self.progressRing.setValue(80)
+            if self.router_process and self.router_process.is_alive():
+                print("INFO: Splash - Terminating router.py due to fluent.py failure.")
+                self.router_process.terminate()
+                self.router_process.join(timeout=1)
+            QTimer.singleShot(3000, self.close_and_exit_app)
+            return
+
+        print("INFO: Splash - Both processes seem to be alive.")
+        self.statusLabel.setText("加载完成!")
+        self.progressRing.setValue(100)
+        self.processes_launched_successfully = True
+        QTimer.singleShot(700, self.close_splash_only) # 成功则只关闭splash
 
     def center_on_screen(self):
         try:
@@ -183,29 +137,49 @@ class SplashScreen(CardWidget):
         except AttributeError:
             pass
 
-    def close_splash_and_exit(self):
+    def close_splash_only(self):
+        print("INFO: Splash - Closing splash screen. Fluent GUI should take over.")
+        self.close()
+        # 不调用 self.parent_app.quit()，让 fluent 的 QApplication 控制
+
+    def close_and_exit_app(self):
+        print("INFO: Splash - Closing splash and exiting application due to failure.")
         self.close()
         if self.parent_app:
             self.parent_app.quit()
 
     def closeEvent(self, event):
-        # 确保在splash意外关闭时，如果进程仍在运行且主应用未成功启动，则尝试终止它们
-        if self.launcher_thread: # 检查线程是否存在
-            router_process, fluent_process = self.launcher_thread.get_processes()
-            if router_process and router_process.is_alive():
-                if not fluent_process or not fluent_process.is_alive():
-                    print("INFO: Splash (closeEvent) - Fluent process not running, terminating router process.")
-                    router_process.terminate()
-                    router_process.join(timeout=1)
+        # 如果 splash 在 fluent 成功启动前被关闭 (例如用户手动关闭)
+        # 并且 router 仍在运行，我们应该终止 router，因为 fluent 可能没有机会启动来管理它。
+        if not self.processes_launched_successfully:
+            print("INFO: Splash (closeEvent) - Splash closed before successful launch.")
+            if self.router_process and self.router_process.is_alive():
+                print("INFO: Splash (closeEvent) - Terminating router.py process.")
+                self.router_process.terminate()
+                self.router_process.join(timeout=1)
+            if self.fluent_process and self.fluent_process.is_alive(): # 以防万一
+                print("INFO: Splash (closeEvent) - Terminating fluent.py process.")
+                self.fluent_process.terminate()
+                self.fluent_process.join(timeout=1)
         super().closeEvent(event)
 
-
 if __name__ == '__main__':
-    multiprocessing.freeze_support()
+    multiprocessing.freeze_support() # 必须在所有 multiprocessing 代码之前
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    app = QApplication(sys.argv)
-    splash_screen = SplashScreen(parent_app=app)
+
+    app = QApplication(sys.argv) # Splash 自己的 QApplication
+    splash_screen = SplashScreenClientSimplified(parent_app=app)
     splash_screen.show()
-    exit_code = app.exec_()
+
+    exit_code = app.exec_() # 运行 Splash 的事件循环
+
+    print(f"INFO: Main (Splash) - Splash application event loop finished with code {exit_code}.")
+
+    if not splash_screen.processes_launched_successfully:
+        if splash_screen.fluent_process and splash_screen.fluent_process.is_alive():
+            print("WARN: Main (Splash) - Fluent process still alive after splash indicated launch failure. Attempting to terminate.")
+            splash_screen.fluent_process.terminate()
+            splash_screen.fluent_process.join(timeout=1)
+
     sys.exit(exit_code)

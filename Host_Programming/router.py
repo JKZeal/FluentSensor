@@ -3,50 +3,77 @@ import sqlite3
 import struct
 import time
 from datetime import datetime
+import os
 
-DB_PATH = "db/sqlite.db"
+ESP_TARGET_IP = "192.168.4.1"
+ESP_TARGET_PORT = 6666
+
+DB_PATH = "db/sqlite.db"  # 数据库文件路径
+PACKET_SIZE = 11          # 预期的数据包大小 (4字节头部 + 7字节数据)
+CLIENT_CONNECT_TIMEOUT = 10.0  # 连接到服务器的超时时间 (秒)
+CLIENT_RECV_TIMEOUT = 30.0     # 从服务器接收数据的超时时间 (秒)
+RECONNECT_DELAY = 5.0          # 连接失败或断开后，重新尝试连接的延迟时间 (秒)
 
 def connect_to_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS sensor_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp DATETIME NOT NULL,
-                temperature REAL NOT NULL,
-                humidity REAL NOT NULL,
-                pm25 INTEGER NOT NULL,
-                noise INTEGER NOT NULL
-            )
-        """)
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+        except OSError as e:
+            print(f"创建数据库失败 {db_dir}: {e}")
+    try:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            conn.execute("PRAGMA journal_mode=WAL") # 启用WAL模式以获得更好的并发性能
+            conn.execute("""
+                         CREATE TABLE IF NOT EXISTS sensor_data
+                         (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             timestamp DATETIME NOT NULL,
+                             temperature REAL NOT NULL,
+                             humidity REAL NOT NULL,
+                             pm25 INTEGER NOT NULL,
+                             noise INTEGER NOT NULL
+                         )
+                         """)
+    except sqlite3.Error as e:
+        print(f"数据库操作错误: {e}")
+        raise
 
 def save_to_db(data):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            INSERT INTO sensor_data 
-            (timestamp, temperature, humidity, pm25, noise)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            data['temperature'],
-            data['humidity'],
-            data['pm25'],
-            data['noise']
-        ))
+    try:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            conn.execute("""
+                         INSERT INTO sensor_data
+                             (timestamp, temperature, humidity, pm25, noise)
+                         VALUES (?, ?, ?, ?, ?)
+                         """, (
+                             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                             data['temperature'],
+                             data['humidity'],
+                             data['pm25'],
+                             data['noise']
+                         ))
+    except sqlite3.Error as e:
+        print(f"保存数据到数据库时出错: {e}")
 
-def unpack_data(packet):
-    header = packet[:4]
+
+
+def unpack_data(packet_bytes):
+    expected_len = PACKET_SIZE
+    if len(packet_bytes) != expected_len:
+        raise ValueError(f"无效的数据包长度. 期望 {expected_len}, 收到 {len(packet_bytes)}.")
+    header = packet_bytes[:4]
     if header != b'\xAA\xBB\xCC\xDD':
-        raise ValueError("Invalid header")
-    data = packet[4:11]
-    # 解析温度（2 字节，int16_t）
-    temperature = struct.unpack('>h', data[:2])[0] / 10.0
-    # 解析湿度（2 字节，uint16_t）
-    humidity = struct.unpack('>H', data[2:4])[0] / 10.0
-    # 解析 PM2.5（2 字节，uint16_t）
-    pm25 = struct.unpack('>H', data[4:6])[0]
-    # 解析噪声（1 字节，uint8_t）
-    noise = struct.unpack('>B', data[6:7])[0]
+        raise ValueError(f"无效的头部. 期望 b'\\xAA\\xBB\\xCC\\xDD', 收到 {header.hex()}.")
+    data_payload = packet_bytes[4:11]
+    try:
+        temperature = struct.unpack('>h', data_payload[0:2])[0] / 10.0
+        humidity = struct.unpack('>H', data_payload[2:4])[0] / 10.0
+        pm25 = struct.unpack('>H', data_payload[4:6])[0]
+        noise = struct.unpack('>B', data_payload[6:7])[0]
+    except struct.error as e:
+        raise ValueError(f"解析数据负载时出错: {e}. 负载: {data_payload.hex()}")
+
     return {
         "temperature": temperature,
         "humidity": humidity,
@@ -54,68 +81,67 @@ def unpack_data(packet):
         "noise": noise
     }
 
-def receive_tcp_data(host='0.0.0.0', port=6000):
-    print(f"数据接收服务启动中 ({host}:{port})...")
-    connect_to_db()
 
+def run_tcp_client(server_ip, server_port):
     try:
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # 设置SOL_SOCKET和SO_REUSEADDR选项，以便服务可以快速重启
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((host, port))
-        server_socket.listen(1)
-        # 设置超时，以便能够响应中断
-        server_socket.settimeout(1.0)
-        print(f"数据接收服务已启动，监听 {host}:{port}")
-
-        while True:
-            try:
-                client_socket, client_address = server_socket.accept()
-                print(f"新连接：来自 {client_address}")
-
-                try:
-                    # 设置客户端连接超时
-                    client_socket.settimeout(1.0)
-                    while True:
-                        try:
-                            packet = client_socket.recv(12)
-                            if not packet:
-                                break
-                            try:
-                                sensor_data = unpack_data(packet)
-                                print(f"接收数据: {sensor_data}")
-                                save_to_db(sensor_data)
-                            except ValueError as e:
-                                print(f"数据包解析错误: {e}")
-                        except socket.timeout:
-                            # 接收超时，继续下一次尝试
-                            continue
-                        except Exception as e:
-                            print(f"接收数据出错: {e}")
-                            break
-                except Exception as e:
-                    print(f"处理连接时出错: {e}")
-                finally:
-                    client_socket.close()
-                    print(f"连接已关闭: {client_address}")
-            except socket.timeout:
-                # 接受连接超时，继续循环等待
-                continue
-            except Exception as e:
-                print(f"接受连接时出错: {e}")
-                # 等待一会再继续尝试
-                time.sleep(1)
-                
-    except KeyboardInterrupt:
-        print("服务关闭请求已接收")
+        connect_to_db()
     except Exception as e:
-        print(f"服务发生错误: {e}")
-    finally:
+        print(f"关键错误: 数据库初始化失败: {e}. 程序无法继续。")
+        return
+
+    client_socket = None
+
+    while True:
         try:
-            server_socket.close()
-            print("数据接收服务已关闭")
-        except:
-            pass
+            print(f"尝试连接到下位机 {server_ip}:{server_port}...")
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.settimeout(CLIENT_CONNECT_TIMEOUT)
+            client_socket.connect((server_ip, server_port))
+            print(f"成功连接到下位机 {server_ip}:{server_port}")
+            client_socket.settimeout(CLIENT_RECV_TIMEOUT)
+
+            while True:
+                received_data_buffer = b''
+                bytes_to_read = PACKET_SIZE
+
+                while len(received_data_buffer) < PACKET_SIZE:
+                    try:
+                        chunk = client_socket.recv(bytes_to_read - len(received_data_buffer))
+                        if not chunk:
+                            raise ConnectionAbortedError("Server closed connection gracefully")
+                        received_data_buffer += chunk
+                    except socket.timeout:
+                        if received_data_buffer:
+                             print(f"接收数据包中途超时 (已收到 {len(received_data_buffer)}/{PACKET_SIZE} 字节). 连接可能已损坏.")
+                             raise socket.timeout
+                        else:
+                            pass
+
+                # 处理完整的数据包
+                if len(received_data_buffer) == PACKET_SIZE:
+                    try:
+                        sensor_data = unpack_data(received_data_buffer)
+                        print(f"接收数据来自 {server_ip}: {sensor_data} (时间: {datetime.now().strftime('%H:%M:%S')})")
+                        save_to_db(sensor_data)
+                    except ValueError as e:
+                        print(f"数据包解析错误来自 {server_ip}: {e}")
+
+
+        except socket.timeout:
+            print(f"连接或接收数据超时。")
+        except ConnectionRefusedError:
+            print(f"连接被 {server_ip}:{server_port} 拒绝。请确保下位机服务器已启动并监听。")
+        except ConnectionAbortedError as e:
+            print(f"连接被中止: {e}。")
+        except OSError as e:
+            print(f"网络错误: {e}。请检查网络连接和服务器状态。")
+        except Exception as e:
+            print(f"处理与 {server_ip} 通信时发生意外错误: {e}")
+        finally:
+            if client_socket:
+                client_socket.close()
+            print(f"等待 {RECONNECT_DELAY} 秒后重试连接...")
+            time.sleep(RECONNECT_DELAY)
 
 if __name__ == "__main__":
-    receive_tcp_data()
+    run_tcp_client(ESP_TARGET_IP, ESP_TARGET_PORT)
