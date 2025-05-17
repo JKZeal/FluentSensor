@@ -54,7 +54,7 @@ def unpack_data(packet):
         "noise": noise
     }
 
-def receive_tcp_data(host='0.0.0.0', port=5000):
+def receive_tcp_data(host='0.0.0.0', port=6000):
     print(f"数据接收服务启动中 ({host}:{port})...")
     connect_to_db()
 
